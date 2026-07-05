@@ -24,6 +24,9 @@ final class JourneyRunner
     public function run(Journey $journey, int $seed, bool $shuffle = true, ?HttpDriver $http = null): Trail
     {
         $steps = $this->validated($journey);
+        // Collected once per trail so a stateful invariant (one that tracks
+        // observations across steps) lives exactly as long as the trail.
+        $invariants = $journey->invariants();
         $context = new Context(new Randomizer(new Mt19937($seed)), $http);
         $trail = new Trail($seed, $shuffle);
 
@@ -31,8 +34,8 @@ final class JourneyRunner
 
         try {
             $shuffle
-                ? $this->runShuffled($journey, $steps, $context, $trail)
-                : $this->runCanonical($journey, $steps, $context, $trail);
+                ? $this->runShuffled($steps, $invariants, $context, $trail)
+                : $this->runCanonical($steps, $invariants, $context, $trail);
         } catch (Throwable $caught) {
             $failure = JourneyFailedException::wrap($journey, $trail, $caught);
         }
@@ -53,8 +56,11 @@ final class JourneyRunner
         return $trail;
     }
 
-    /** @param list<Step> $steps */
-    private function runCanonical(Journey $journey, array $steps, Context $context, Trail $trail): void
+    /**
+     * @param  list<Step>  $steps
+     * @param  list<Invariant>  $invariants
+     */
+    private function runCanonical(array $steps, array $invariants, Context $context, Trail $trail): void
     {
         foreach ($steps as $step) {
             if (! $step->isEnabled($context)) {
@@ -64,12 +70,15 @@ final class JourneyRunner
                 ));
             }
 
-            $this->executeStep($journey, $step, $context, $trail);
+            $this->executeStep($step, $invariants, $context, $trail);
         }
     }
 
-    /** @param list<Step> $steps */
-    private function runShuffled(Journey $journey, array $steps, Context $context, Trail $trail): void
+    /**
+     * @param  list<Step>  $steps
+     * @param  list<Invariant>  $invariants
+     */
+    private function runShuffled(array $steps, array $invariants, Context $context, Trail $trail): void
     {
         $ticks = 0;
         $maxTicks = max(100, count($steps) * self::TICK_MULTIPLIER);
@@ -93,17 +102,18 @@ final class JourneyRunner
 
             $step = $enabled[$context->randomInt(0, count($enabled) - 1)];
 
-            $this->executeStep($journey, $step, $context, $trail);
+            $this->executeStep($step, $invariants, $context, $trail);
         }
     }
 
-    private function executeStep(Journey $journey, Step $step, Context $context, Trail $trail): void
+    /** @param list<Invariant> $invariants */
+    private function executeStep(Step $step, array $invariants, Context $context, Trail $trail): void
     {
         $trail->record($step->name());
 
         $step->execute($context);
 
-        foreach ($journey->invariants() as $invariant) {
+        foreach ($invariants as $invariant) {
             try {
                 $invariant->check($context);
             } catch (Throwable $caught) {

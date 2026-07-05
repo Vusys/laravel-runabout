@@ -162,6 +162,30 @@ final class JourneyRunnerTest extends TestCase
         }
     }
 
+    public function test_invariants_are_collected_once_per_trail_so_they_can_hold_state(): void
+    {
+        $journey = new class extends Journey
+        {
+            public int $collections = 0;
+
+            public function steps(): array
+            {
+                return [Step::make('one'), Step::make('two'), Step::make('three')];
+            }
+
+            public function invariants(): array
+            {
+                $this->collections++;
+
+                return [];
+            }
+        };
+
+        (new JourneyRunner)->run($journey, seed: 1);
+
+        $this->assertSame(1, $journey->collections);
+    }
+
     public function test_a_repeatable_step_can_tell_whether_it_ran_before(): void
     {
         /** @var ArrayObject<int, bool> $observed */
