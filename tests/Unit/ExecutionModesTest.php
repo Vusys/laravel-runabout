@@ -145,6 +145,60 @@ final class ExecutionModesTest extends TestCase
         }
     }
 
+    public function test_seed_replays_exactly_one_shuffled_trail(): void
+    {
+        /** @var list<Trail> $trails */
+        $trails = [];
+
+        $this->pending($this->journey([Step::make('a'), Step::make('b')]))
+            ->seed(123)
+            ->onTrail(function (Trail $trail) use (&$trails): void {
+                $trails[] = $trail;
+            })
+            ->run();
+
+        $this->assertCount(1, $trails);
+        $this->assertSame('shuffled', $trails[0]->mode());
+        $this->assertSame(123, $trails[0]->seed());
+    }
+
+    public function test_repeat_heavy_trails_carry_their_mode(): void
+    {
+        /** @var list<string> $modes */
+        $modes = [];
+
+        $this->pending($this->journey([Step::make('a'), Step::make('b')->repeatable(max: 5)]))
+            ->repeatHeavy()
+            ->shuffles(2)
+            ->onTrail(function (Trail $trail) use (&$modes): void {
+                $modes[] = $trail->mode();
+            })
+            ->run();
+
+        $this->assertSame(['canonical', 'repeat-heavy', 'repeat-heavy'], $modes);
+    }
+
+    public function test_at_least_one_journey_is_required(): void
+    {
+        $this->expectException(InvalidJourneyException::class);
+        $this->expectExceptionMessage('At least one journey is required');
+
+        new PendingJourney([], fn (Closure $trail) => $trail());
+    }
+
+    public function test_exhaustive_mode_refuses_interleaved_journeys(): void
+    {
+        $pending = new PendingJourney(
+            [$this->journey([Step::make('a')]), $this->journey([Step::make('b')])],
+            fn (Closure $trail) => $trail(),
+        );
+
+        $this->expectException(InvalidJourneyException::class);
+        $this->expectExceptionMessage('Exhaustive mode is not available for interleaved journeys');
+
+        $pending->exhaustive()->run();
+    }
+
     public function test_randomize_env_explores_fresh_seeds_each_run(): void
     {
         putenv('RUNABOUT_RANDOMIZE=1');

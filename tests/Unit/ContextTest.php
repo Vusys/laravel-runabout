@@ -237,6 +237,38 @@ final class ContextTest extends TestCase
         }
     }
 
+    public function test_forget_removes_a_remembered_value(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('key', 'value');
+
+        $ctx->forget('key');
+
+        $this->assertFalse($ctx->has('key'));
+        $this->assertSame('fallback', $ctx->get('key', 'fallback'));
+    }
+
+    public function test_random_int_is_seeded_and_bounded(): void
+    {
+        $draw = function (): array {
+            $ctx = new Context(new Randomizer(new Mt19937(42)));
+
+            return array_map(fn (): int => $ctx->randomInt(10, 20), range(1, 25));
+        };
+
+        $first = $draw();
+
+        $this->assertSame($first, $draw());
+        $this->assertSame($first, array_filter($first, fn (int $n): bool => $n >= 10 && $n <= 20));
+    }
+
+    public function test_randomizer_exposes_the_seeded_source(): void
+    {
+        $randomizer = new Randomizer(new Mt19937(1));
+
+        $this->assertSame($randomizer, (new Context($randomizer))->randomizer());
+    }
+
     private function context(): Context
     {
         return new Context(new Randomizer(new Mt19937(1)));
