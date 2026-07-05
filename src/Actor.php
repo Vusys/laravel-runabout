@@ -13,13 +13,13 @@ use Symfony\Component\HttpFoundation\Response;
  * authenticated as that actor's user, so steps can freely hop between
  * participants: $ctx->as('manager')->postJson(...).
  */
-final class Actor
+final readonly class Actor
 {
     public function __construct(
-        private readonly string $name,
-        private readonly Authenticatable $user,
-        private readonly HttpDriver $http,
-        private readonly Context $context,
+        private string $name,
+        private Authenticatable $user,
+        private HttpDriver $http,
+        private Context $context,
     ) {}
 
     public function name(): string

@@ -10,7 +10,7 @@ final class Step
 {
     private ?Closure $act = null;
 
-    /** @var list<Closure(Context): void> */
+    /** @var list<Closure(Context): mixed> */
     private array $assertions = [];
 
     /** @var list<Closure(Context): bool> */
@@ -38,7 +38,7 @@ final class Step
         return $this;
     }
 
-    /** @param Closure(Context): void $fn May be called multiple times to add several assertions. */
+    /** @param Closure(Context): mixed $fn Return values are ignored. May be called multiple times to add several assertions. */
     public function assert(Closure $fn): self
     {
         $this->assertions[] = $fn;

@@ -74,6 +74,30 @@ final class Context
         return $value;
     }
 
+    /** A typed get() for remembered integers (IDs from responses, counters). */
+    public function integer(string $key): int
+    {
+        $value = $this->get($key);
+
+        if (! is_int($value)) {
+            throw new RuntimeException(sprintf('Context key "%s" holds %s, expected int.', $key, get_debug_type($value)));
+        }
+
+        return $value;
+    }
+
+    /** A typed get() for remembered strings. */
+    public function string(string $key): string
+    {
+        $value = $this->get($key);
+
+        if (! is_string($value)) {
+            throw new RuntimeException(sprintf('Context key "%s" holds %s, expected string.', $key, get_debug_type($value)));
+        }
+
+        return $value;
+    }
+
     public function has(string $key): bool
     {
         return array_key_exists($key, $this->values);

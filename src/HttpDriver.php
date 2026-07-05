@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
  * by RunsJourneys so the package never has to name the test case's concrete
  * class — anything with Laravel's MakesHttpRequests methods works.
  */
-final class HttpDriver
+final readonly class HttpDriver
 {
     /**
      * @param  Closure(Authenticatable): void  $authenticate
@@ -22,9 +22,9 @@ final class HttpDriver
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $form
      */
     public function __construct(
-        private readonly Closure $authenticate,
-        private readonly Closure $json,
-        private readonly Closure $form,
+        private Closure $authenticate,
+        private Closure $json,
+        private Closure $form,
     ) {}
 
     public function authenticate(Authenticatable $user): void

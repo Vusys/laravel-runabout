@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Vusys\Runabout\Tests\Fixtures\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+
+/**
+ * @property int $id
+ * @property string $name
+ */
+final class User extends Authenticatable
+{
+    protected $guarded = [];
+
+    public $timestamps = false;
+}

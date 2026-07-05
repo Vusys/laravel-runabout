@@ -47,6 +47,43 @@ final class ContextTest extends TestCase
         $ctx->instance('thing', stdClass::class);
     }
 
+    public function test_integer_returns_the_remembered_int(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('post id', 42);
+
+        $this->assertSame(42, $ctx->integer('post id'));
+    }
+
+    public function test_integer_rejects_a_non_int(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('post id', '42');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Context key "post id" holds string, expected int.');
+
+        $ctx->integer('post id');
+    }
+
+    public function test_string_returns_the_remembered_string(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('name', 'ana');
+
+        $this->assertSame('ana', $ctx->string('name'));
+    }
+
+    public function test_string_rejects_a_non_string(): void
+    {
+        $ctx = $this->context();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Context key "name" holds null, expected string.');
+
+        $ctx->string('name');
+    }
+
     public function test_acting_as_requires_an_http_driver(): void
     {
         $ctx = $this->context();
