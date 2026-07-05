@@ -22,6 +22,8 @@ return new class extends Migration
             $table->string('title');
             $table->string('status')->default('draft');
             $table->integer('score')->default(0);
+            $table->integer('votes_today')->default(0);
+            $table->date('votes_today_date')->nullable();
             $table->timestamps();
         });
 
@@ -30,6 +32,7 @@ return new class extends Migration
             $table->foreignId('post_id')->constrained();
             $table->string('voter');
             $table->integer('value');
+            $table->date('cast_on');
             $table->timestamps();
         });
     }

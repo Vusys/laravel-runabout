@@ -19,11 +19,13 @@ final class HttpPostLifecycleJourneyTest extends TestCase
         parent::setUp();
 
         PostService::$buggyRevote = false;
+        PostService::$buggyStaleBucket = false;
     }
 
     protected function tearDown(): void
     {
         PostService::$buggyRevote = false;
+        PostService::$buggyStaleBucket = false;
 
         parent::tearDown();
     }

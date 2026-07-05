@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout\Tests\Fixtures;
 
+use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Assert;
 use Vusys\Runabout\Context;
 use Vusys\Runabout\Invariant;
@@ -32,6 +33,10 @@ final class PostLifecycleJourney extends Journey
                 ->after('draft post')
                 ->act(fn (Context $ctx) => $service->publish($ctx->instance('post', Post::class)))
                 ->assert(fn (Context $ctx) => Assert::assertSame('published', $ctx->instance('post', Post::class)->refresh()->status)),
+
+            Step::make('a new day dawns')
+                ->after('publish post')
+                ->act(fn (Context $ctx) => $ctx->travel('+1 day')),
 
             Step::make('cast vote')
                 ->after('publish post')
@@ -74,6 +79,22 @@ final class PostLifecycleJourney extends Journey
                         (int) $post->votes()->sum('value'),
                         $post->score,
                         sprintf('Cached score of post %d drifted from its votes.', $post->id),
+                    );
+                }
+            }),
+
+            Invariant::make('daily vote bucket matches votes cast today', function (): void {
+                $today = Date::today()->toDateString();
+
+                foreach (Post::query()->get() as $post) {
+                    if ($post->votes_today_date?->toDateString() !== $today) {
+                        continue; // A stale bucket is legal — it resets lazily on the next write.
+                    }
+
+                    Assert::assertSame(
+                        $post->votes()->whereDate('cast_on', $today)->count(),
+                        $post->votes_today,
+                        sprintf("Post %d's daily vote bucket drifted from the votes actually cast today.", $post->id),
                     );
                 }
             }),

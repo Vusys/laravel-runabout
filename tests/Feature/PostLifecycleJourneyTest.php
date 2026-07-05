@@ -19,11 +19,13 @@ final class PostLifecycleJourneyTest extends TestCase
         parent::setUp();
 
         PostService::$buggyRevote = false;
+        PostService::$buggyStaleBucket = false;
     }
 
     protected function tearDown(): void
     {
         PostService::$buggyRevote = false;
+        PostService::$buggyStaleBucket = false;
 
         parent::tearDown();
     }
@@ -55,6 +57,34 @@ final class PostLifecycleJourneyTest extends TestCase
         } catch (JourneyFailedException $e) {
             $this->assertStringContainsString('post score equals sum of votes', $e->getMessage());
             $this->assertStringContainsString('cast vote', $e->getMessage());
+            $this->assertStringContainsString('RUNABOUT_SEED=', $e->getMessage());
+        }
+    }
+
+    public function test_the_canonical_order_misses_the_planted_stale_bucket_bug(): void
+    {
+        PostService::$buggyStaleBucket = true;
+
+        // The declared order crosses the day boundary before any vote is cast,
+        // so the bucket never carries a stale count.
+        $this->journey(PostLifecycleJourney::class)->shuffles(0)->run();
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_shuffling_finds_the_planted_stale_bucket_bug(): void
+    {
+        PostService::$buggyStaleBucket = true;
+
+        try {
+            // Only a vote → new day → vote trail triggers this bug, and under a
+            // uniform picker that shape shows up in roughly 1 in 12 trails (the
+            // first catching derived seed is trail #40). That rarity is exactly
+            // what the repeat-heavy execution mode exists to fix.
+            $this->journey(PostLifecycleJourney::class)->shuffles(50)->run();
+            $this->fail('Expected a vote-day-vote shuffle to catch the stale bucket bug.');
+        } catch (JourneyFailedException $e) {
+            $this->assertStringContainsString('daily vote bucket matches votes cast today', $e->getMessage());
             $this->assertStringContainsString('RUNABOUT_SEED=', $e->getMessage());
         }
     }
