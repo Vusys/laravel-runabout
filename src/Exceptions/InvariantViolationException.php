@@ -6,15 +6,17 @@ namespace Vusys\Runabout\Exceptions;
 
 use RuntimeException;
 use Throwable;
-use Vusys\Runabout\Invariant;
-use Vusys\Runabout\Step;
 
 final class InvariantViolationException extends RuntimeException
 {
-    public static function make(Invariant $invariant, Step $step, Throwable $cause): self
+    /**
+     * @param  string  $invariant  The invariant's name, labelled with its owning instance when interleaved.
+     * @param  string  $step  The step's name, labelled with its acting instance when interleaved.
+     */
+    public static function make(string $invariant, string $step, Throwable $cause): self
     {
         return new self(
-            sprintf('Invariant "%s" violated after step "%s": %s', $invariant->name(), $step->name(), $cause->getMessage()),
+            sprintf('Invariant "%s" violated after step "%s": %s', $invariant, $step, $cause->getMessage()),
             0,
             $cause,
         );

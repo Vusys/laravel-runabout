@@ -26,4 +26,10 @@ final readonly class JourneyInstance
             ? $this->journey::class
             : sprintf('%s=%s', $this->label, $this->journey::class);
     }
+
+    /** A step or invariant name carrying this instance's trail label; unchanged for single-instance runs. */
+    public function labelled(string $name): string
+    {
+        return $this->label === null ? $name : sprintf('%s: %s', $this->label, $name);
+    }
 }

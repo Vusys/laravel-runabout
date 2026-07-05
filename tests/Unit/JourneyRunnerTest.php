@@ -129,6 +129,34 @@ final class JourneyRunnerTest extends TestCase
         }
     }
 
+    public function test_an_interleaved_violation_names_the_invariants_instance_and_the_acting_step(): void
+    {
+        $poisoned = false;
+
+        $poisoner = $this->journey([
+            Step::make('poison')->act(function () use (&$poisoned): void {
+                $poisoned = true;
+            }),
+        ]);
+
+        $watcher = $this->journey(
+            [Step::make('watch')],
+            [Invariant::make('nothing is poisoned', function () use (&$poisoned): void {
+                Assert::assertFalse($poisoned, 'poison detected');
+            })],
+        );
+
+        try {
+            (new JourneyRunner)->runInterleaved([$poisoner, $watcher], seed: 1, shuffle: false);
+            $this->fail('Expected the watcher\'s invariant to fail after the poisoner\'s step.');
+        } catch (JourneyFailedException $e) {
+            $this->assertStringContainsString(
+                'Invariant "B: nothing is poisoned" violated after step "A: poison"',
+                $e->getMessage(),
+            );
+        }
+    }
+
     public function test_teardowns_run_in_reverse_order_and_also_on_failure(): void
     {
         $log = [];

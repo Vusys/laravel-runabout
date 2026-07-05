@@ -34,7 +34,7 @@ Declaring the wrapper once on the journey (rather than calling a helper at the t
 
 ## Trails and failure output
 
-Steps are recorded with an instance label (`A: cast vote`, `B: draft post`); single-instance trails stay unlabelled. The failure message names each label's journey class, and the seed replays the merged trail exactly — same interleaving, same data choices.
+Steps are recorded with an instance label (`A: cast vote`, `B: draft post`); single-instance trails stay unlabelled. An invariant violation carries two labels — the invariant's owning instance and the acting step's (`Invariant "A: ..." violated after step "B: ..."`), which reads as the cross-instance story it is: whose expectation broke, and whose action broke it. The failure message names each label's journey class, and the seed replays the merged trail exactly — same interleaving, same data choices.
 
 ## Modes
 

@@ -238,7 +238,7 @@ final class JourneyRunner
      */
     private function executeStep(JourneyInstance $instance, Step $step, array $instances, Trail $trail): void
     {
-        $trail->record($instance->label === null ? $step->name() : sprintf('%s: %s', $instance->label, $step->name()));
+        $trail->record($instance->labelled($step->name()));
 
         $this->wrapped($instance, fn () => $step->execute($instance->context));
 
@@ -247,12 +247,16 @@ final class JourneyRunner
                 continue;
             }
 
-            $this->wrapped($owner, function () use ($owner, $step): void {
+            $this->wrapped($owner, function () use ($owner, $instance, $step): void {
                 foreach ($owner->invariants as $invariant) {
                     try {
                         $invariant->check($owner->context);
                     } catch (Throwable $caught) {
-                        throw InvariantViolationException::make($invariant, $step, $caught);
+                        throw InvariantViolationException::make(
+                            $owner->labelled($invariant->name()),
+                            $instance->labelled($step->name()),
+                            $caught,
+                        );
                     }
                 }
             });
@@ -297,8 +301,7 @@ final class JourneyRunner
         foreach ($instances as $instance) {
             foreach ($instance->steps as $step) {
                 if ($instance->context->timesRan($step->name()) === 0) {
-                    $name = $instance->label === null ? $step->name() : sprintf('%s: %s', $instance->label, $step->name());
-                    $pending[] = '"'.$name.'"';
+                    $pending[] = '"'.$instance->labelled($step->name()).'"';
                 }
             }
         }

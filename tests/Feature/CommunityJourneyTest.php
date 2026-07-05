@@ -61,8 +61,8 @@ final class CommunityJourneyTest extends TestCase
             // Even the canonical interleaved baseline (A's journey in full,
             // then B's) exposes this bleed: B's first unscoped count already
             // includes A's posts.
-            $this->assertStringContainsString('Community.posts_count matches its source data', $e->getMessage());
-            $this->assertMatchesRegularExpression('/[AB]: draft post/', $e->getMessage());
+            $this->assertMatchesRegularExpression('/Invariant "[AB]: Community\.posts_count matches its source data"/', $e->getMessage());
+            $this->assertMatchesRegularExpression('/after step "[AB]: draft post"/', $e->getMessage());
         }
     }
 
