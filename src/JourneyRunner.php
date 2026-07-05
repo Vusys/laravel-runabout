@@ -172,8 +172,11 @@ final class JourneyRunner
     private function runShuffled(array $instances, Randomizer $randomizer, Trail $trail, int $repeatBias): void
     {
         $ticks = 0;
-        $totalSteps = array_sum(array_map(fn (JourneyInstance $instance): int => count($instance->steps), $instances));
-        $maxTicks = max(100, $totalSteps * self::TICK_MULTIPLIER);
+        $minTotal = array_sum(array_map(
+            fn (JourneyInstance $instance): int => array_sum(array_map(fn (Step $step): int => $step->minRuns(), $instance->steps)),
+            $instances,
+        ));
+        $maxTicks = max(100, $minTotal * self::TICK_MULTIPLIER);
 
         while (($pending = $this->pending($instances)) !== []) {
             $enabled = $this->enabled($instances);
@@ -300,7 +303,7 @@ final class JourneyRunner
 
         foreach ($instances as $instance) {
             foreach ($instance->steps as $step) {
-                if ($instance->context->timesRan($step->name()) === 0) {
+                if ($instance->context->timesRan($step->name()) < $step->minRuns()) {
                     $pending[] = '"'.$instance->labelled($step->name()).'"';
                 }
             }

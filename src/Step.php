@@ -22,6 +22,8 @@ final class Step
 
     private int $maxRuns = 1;
 
+    private int $minRuns = 1;
+
     private int $weight = 1;
 
     private ?Closure $teardown = null;
@@ -82,10 +84,24 @@ final class Step
         return $this;
     }
 
-    /** @param int|null $max Maximum executions per trail; null means unlimited (the trail still ends once every step has run). */
-    public function repeatable(?int $max = null): self
+    /**
+     * @param  int|null  $max  Maximum executions per trail; null means unlimited.
+     * @param  int  $min  Minimum executions before the trail is allowed to complete
+     *                    (default 1). A single "advance" step with min > 1 drives a
+     *                    bounded random walk — the shape a state machine wants.
+     */
+    public function repeatable(?int $max = null, int $min = 1): self
     {
         $this->maxRuns = $max ?? PHP_INT_MAX;
+        $this->minRuns = $min;
+
+        if ($min < 1) {
+            throw new InvalidJourneyException(sprintf('Step "%s" needs a minimum of at least 1 run, got %d.', $this->name, $min));
+        }
+
+        if ($min > $this->maxRuns) {
+            throw new InvalidJourneyException(sprintf('Step "%s" has min %d greater than max %d.', $this->name, $min, $this->maxRuns));
+        }
 
         return $this;
     }
@@ -128,6 +144,12 @@ final class Step
     public function isRepeatable(): bool
     {
         return $this->maxRuns > 1;
+    }
+
+    /** Minimum executions required before the trail may complete. */
+    public function minRuns(): int
+    {
+        return $this->minRuns;
     }
 
     public function pickWeight(): int

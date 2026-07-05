@@ -238,6 +238,40 @@ final class ExecutionModesTest extends TestCase
     }
 
     /** Total executions of a repeatable step across seeds 1-15. */
+    public function test_min_runs_must_be_at_least_one(): void
+    {
+        $this->expectException(InvalidJourneyException::class);
+        $this->expectExceptionMessage('needs a minimum of at least 1 run');
+
+        Step::make('walk')->repeatable(max: 5, min: 0);
+    }
+
+    public function test_min_runs_cannot_exceed_max(): void
+    {
+        $this->expectException(InvalidJourneyException::class);
+        $this->expectExceptionMessage('has min 6 greater than max 5');
+
+        Step::make('walk')->repeatable(max: 5, min: 6);
+    }
+
+    public function test_a_lone_repeatable_step_with_a_minimum_drives_a_multi_step_walk(): void
+    {
+        // A single always-enabled step reaches its minimum every trail — the
+        // shape a state-machine random walk needs, which a plain repeatable
+        // step (min 1) cannot express (it would run exactly once).
+        $journey = $this->journey([
+            Step::make('advance')->repeatable(max: 20, min: 8),
+        ]);
+
+        for ($seed = 1; $seed <= 10; $seed++) {
+            $trail = (new JourneyRunner)->run($journey, $seed, shuffle: true);
+            $runs = count(array_filter($trail->steps(), fn (string $step): bool => $step === 'advance'));
+
+            $this->assertGreaterThanOrEqual(8, $runs);
+            $this->assertLessThanOrEqual(20, $runs);
+        }
+    }
+
     private function repeatableRuns(int $weight, int $repeatBias = 1): int
     {
         $journey = $this->journey([
