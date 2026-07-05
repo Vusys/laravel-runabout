@@ -104,6 +104,42 @@ final class Context
         return $value;
     }
 
+    /**
+     * Append a value to the list remembered under $key, starting one when the
+     * key is absent. The step-side companion of list().
+     *
+     * @return list<mixed> The updated list.
+     */
+    public function push(string $key, mixed $value): array
+    {
+        $list = [...$this->list($key), $value];
+
+        $this->values[$key] = $list;
+
+        return $list;
+    }
+
+    /**
+     * The list remembered under $key — an empty list when the key is absent,
+     * a RuntimeException when it holds anything other than a list.
+     *
+     * @return list<mixed>
+     */
+    public function list(string $key): array
+    {
+        if (! $this->has($key)) {
+            return [];
+        }
+
+        $value = $this->values[$key];
+
+        if (! is_array($value) || ! array_is_list($value)) {
+            throw new RuntimeException(sprintf('Context key "%s" holds %s, expected a list.', $key, get_debug_type($value)));
+        }
+
+        return $value;
+    }
+
     public function has(string $key): bool
     {
         return array_key_exists($key, $this->values);

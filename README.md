@@ -186,6 +186,9 @@ $ctx->string('reporter');
 $ctx->has('post');
 $ctx->forget('post');
 
+$ctx->push('created posts', $post->id);      // append to a remembered list, starting it when absent
+$ctx->list('created posts');                 // that list — [] when nothing was pushed yet
+
 $ctx->pick(['ana', 'ben', 'cai']);           // seeded choice — never use rand()/fake() directly
 $ctx->randomInt(1, 10);                      // seeded int
 $ctx->randomizer();                          // the underlying \Random\Randomizer

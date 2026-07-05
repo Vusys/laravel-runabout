@@ -85,6 +85,51 @@ final class ContextTest extends TestCase
         $ctx->string('name');
     }
 
+    public function test_push_starts_a_list_and_appends_to_it(): void
+    {
+        $ctx = $this->context();
+
+        $this->assertSame(['ana'], $ctx->push('voters', 'ana'));
+        $this->assertSame(['ana', 'ben'], $ctx->push('voters', 'ben'));
+        $this->assertSame(['ana', 'ben'], $ctx->list('voters'));
+    }
+
+    public function test_list_is_empty_for_a_missing_key(): void
+    {
+        $this->assertSame([], $this->context()->list('voters'));
+    }
+
+    public function test_list_rejects_a_key_holding_something_other_than_a_list(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('voters', 'ana');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Context key "voters" holds string, expected a list.');
+
+        $ctx->list('voters');
+    }
+
+    public function test_push_rejects_a_key_holding_something_other_than_a_list(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('voters', ['lead' => 'ana']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Context key "voters" holds array, expected a list.');
+
+        $ctx->push('voters', 'ben');
+    }
+
+    public function test_a_pushed_list_interoperates_with_remember_and_get(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('voters', ['ana', 'ben']);
+        $ctx->push('voters', 'cai');
+
+        $this->assertSame(['ana', 'ben', 'cai'], $ctx->get('voters'));
+    }
+
     public function test_acting_as_requires_an_http_driver(): void
     {
         $ctx = $this->context();
