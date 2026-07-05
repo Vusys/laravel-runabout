@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout;
 
 use Closure;
+use Vusys\Runabout\Exceptions\InvalidJourneyException;
 
 final class Step
 {
@@ -20,6 +21,8 @@ final class Step
     private array $after = [];
 
     private int $maxRuns = 1;
+
+    private int $weight = 1;
 
     private ?Closure $teardown = null;
 
@@ -70,6 +73,22 @@ final class Step
         return $this;
     }
 
+    /**
+     * How strongly the shuffled picker favours this step relative to the
+     * others (default 1). A step with weight 3 is picked three times as
+     * often as a weight-1 step whenever both are enabled.
+     */
+    public function weight(int $weight): self
+    {
+        if ($weight < 1) {
+            throw new InvalidJourneyException(sprintf('Step "%s" needs a weight of at least 1, got %d.', $this->name, $weight));
+        }
+
+        $this->weight = $weight;
+
+        return $this;
+    }
+
     /** @param Closure(Context): void $fn Registered per execution, run LIFO at the end of the trail, even on failure. */
     public function teardown(Closure $fn): self
     {
@@ -87,6 +106,16 @@ final class Step
     public function dependencies(): array
     {
         return $this->after;
+    }
+
+    public function isRepeatable(): bool
+    {
+        return $this->maxRuns > 1;
+    }
+
+    public function pickWeight(): int
+    {
+        return $this->weight;
     }
 
     public function isEnabled(Context $context): bool

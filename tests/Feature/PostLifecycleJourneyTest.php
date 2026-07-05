@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout\Tests\Feature;
 
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
+use Vusys\Runabout\JourneyRunner;
 use Vusys\Runabout\RunsJourneys;
 use Vusys\Runabout\Tests\Fixtures\PostLifecycleJourney;
 use Vusys\Runabout\Tests\Fixtures\PostService;
@@ -88,6 +92,18 @@ final class PostLifecycleJourneyTest extends TestCase
         $this->assertShufflingCatches('Post.reports_remaining balances against its quota', shuffles: 30);
     }
 
+    public function test_repeat_heavy_mode_finds_the_revote_bug_in_fewer_trails(): void
+    {
+        PostService::$buggyRevote = true;
+
+        $uniform = $this->trailsToFirstCatch(repeatBias: 1);
+        $repeatHeavy = $this->trailsToFirstCatch(repeatBias: 5);
+
+        // The revote bug needs the same voter to vote twice, so a picker that
+        // favours re-running repeatable steps reaches it much sooner.
+        $this->assertLessThan($uniform, $repeatHeavy);
+    }
+
     public function test_replaying_the_failing_seed_reproduces_the_failure(): void
     {
         PostService::$buggyRevote = true;
@@ -105,6 +121,27 @@ final class PostLifecycleJourneyTest extends TestCase
                 $this->assertSame($first->trail()->steps(), $replayed->trail()->steps());
             }
         }
+    }
+
+    /** How many seeded trails a shuffled run needs before the first failure. */
+    private function trailsToFirstCatch(int $repeatBias): int
+    {
+        for ($i = 1; $i <= 150; $i++) {
+            $seed = crc32(PostLifecycleJourney::class.'#'.$i);
+            $connection = DB::connection();
+            $connection->beginTransaction();
+
+            try {
+                (new JourneyRunner)->run(new PostLifecycleJourney, $seed, shuffle: true, repeatBias: $repeatBias);
+            } catch (Throwable) {
+                return $i;
+            } finally {
+                $connection->rollBack();
+                Date::setTestNow();
+            }
+        }
+
+        $this->fail(sprintf('No trail failed within 150 seeds at repeat bias %d.', $repeatBias));
     }
 
     private function assertShufflingCatches(string $invariant, int $shuffles): void

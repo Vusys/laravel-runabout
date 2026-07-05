@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout;
 
+use Closure;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
 use Throwable;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\InvariantViolationException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
+use Vusys\Runabout\Exceptions\OrderNotViableException;
 
 final class JourneyRunner
 {
@@ -20,22 +22,73 @@ final class JourneyRunner
      */
     private const int TICK_MULTIPLIER = 25;
 
-    /** @throws JourneyFailedException */
-    public function run(Journey $journey, int $seed, bool $shuffle = true, ?HttpDriver $http = null): Trail
+    /**
+     * @param  int  $repeatBias  Multiplies every repeatable step's pick weight;
+     *                           above 1 the trail hunts idempotency and counter
+     *                           bugs by re-running repeatable steps more often.
+     *
+     * @throws JourneyFailedException
+     */
+    public function run(Journey $journey, int $seed, bool $shuffle = true, ?HttpDriver $http = null, int $repeatBias = 1): Trail
     {
         $steps = $this->validated($journey);
+        $mode = $shuffle ? ($repeatBias > 1 ? 'repeat-heavy' : 'shuffled') : 'canonical';
+
+        return $this->trail($journey, $steps, $seed, $mode, $http, function (array $steps, array $invariants, Context $context, Trail $trail) use ($shuffle, $repeatBias): void {
+            $shuffle
+                ? $this->runShuffled($steps, $invariants, $context, $trail, $repeatBias)
+                : $this->runCanonical($steps, $invariants, $context, $trail);
+        });
+    }
+
+    /**
+     * Run the steps in one explicit order (by declared index), skipping the
+     * order entirely if a step is not enabled when its slot comes up.
+     *
+     * @param  list<int>  $order
+     *
+     * @throws OrderNotViableException when the order is not a valid trail
+     * @throws JourneyFailedException
+     */
+    public function runOrder(Journey $journey, array $order, int $seed, ?HttpDriver $http = null): Trail
+    {
+        $steps = $this->validated($journey);
+
+        return $this->trail($journey, $steps, $seed, 'exhaustive', $http, function (array $steps, array $invariants, Context $context, Trail $trail) use ($order): void {
+            foreach ($order as $index) {
+                $step = $steps[$index];
+
+                if (! $step->isEnabled($context)) {
+                    throw new OrderNotViableException($step->name());
+                }
+
+                $this->executeStep($step, $invariants, $context, $trail);
+            }
+        });
+    }
+
+    /**
+     * Shared harness: build the context, run the body, drain teardowns even
+     * on failure, and wrap any failure with the trail that produced it.
+     *
+     * @param  list<Step>  $steps
+     * @param  'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'  $mode
+     * @param  Closure(list<Step>, list<Invariant>, Context, Trail): void  $body
+     */
+    private function trail(Journey $journey, array $steps, int $seed, string $mode, ?HttpDriver $http, Closure $body): Trail
+    {
         // Collected once per trail so a stateful invariant (one that tracks
         // observations across steps) lives exactly as long as the trail.
         $invariants = $journey->invariants();
         $context = new Context(new Randomizer(new Mt19937($seed)), $http);
-        $trail = new Trail($seed, $shuffle);
+        $trail = new Trail($seed, $mode);
 
         $failure = null;
 
         try {
-            $shuffle
-                ? $this->runShuffled($steps, $invariants, $context, $trail)
-                : $this->runCanonical($steps, $invariants, $context, $trail);
+            $body($steps, $invariants, $context, $trail);
+        } catch (OrderNotViableException $notViable) {
+            $failure = $notViable;
         } catch (Throwable $caught) {
             $failure = JourneyFailedException::wrap($journey, $trail, $caught);
         }
@@ -49,7 +102,7 @@ final class JourneyRunner
             }
         }
 
-        if ($failure instanceof JourneyFailedException) {
+        if ($failure !== null) {
             throw $failure;
         }
 
@@ -78,7 +131,7 @@ final class JourneyRunner
      * @param  list<Step>  $steps
      * @param  list<Invariant>  $invariants
      */
-    private function runShuffled(array $steps, array $invariants, Context $context, Trail $trail): void
+    private function runShuffled(array $steps, array $invariants, Context $context, Trail $trail, int $repeatBias = 1): void
     {
         $ticks = 0;
         $maxTicks = max(100, count($steps) * self::TICK_MULTIPLIER);
@@ -100,10 +153,35 @@ final class JourneyRunner
                 ));
             }
 
-            $step = $enabled[$context->randomInt(0, count($enabled) - 1)];
-
-            $this->executeStep($step, $invariants, $context, $trail);
+            $this->executeStep($this->pick($enabled, $context, $repeatBias), $invariants, $context, $trail);
         }
+    }
+
+    /**
+     * Weighted pick among the enabled steps. With unit weights and no bias
+     * this consumes the randomizer identically to a uniform pick, so plain
+     * shuffle trails are stable across versions.
+     *
+     * @param  non-empty-list<Step>  $enabled
+     */
+    private function pick(array $enabled, Context $context, int $repeatBias): Step
+    {
+        $weights = array_map(
+            fn (Step $step): int => $step->pickWeight() * ($step->isRepeatable() ? $repeatBias : 1),
+            $enabled,
+        );
+
+        $roll = $context->randomInt(1, array_sum($weights));
+
+        foreach ($enabled as $index => $step) {
+            $roll -= $weights[$index];
+
+            if ($roll <= 0) {
+                return $step;
+            }
+        }
+
+        return $enabled[count($enabled) - 1];
     }
 
     /** @param list<Invariant> $invariants */

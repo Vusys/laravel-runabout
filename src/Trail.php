@@ -10,9 +10,10 @@ final class Trail
     /** @var list<string> */
     private array $steps = [];
 
+    /** @param 'canonical'|'shuffled'|'repeat-heavy'|'exhaustive' $mode */
     public function __construct(
         private readonly int $seed,
-        private readonly bool $shuffled,
+        private readonly string $mode,
     ) {}
 
     public function record(string $step): void
@@ -25,9 +26,15 @@ final class Trail
         return $this->seed;
     }
 
+    /** @return 'canonical'|'shuffled'|'repeat-heavy'|'exhaustive' */
+    public function mode(): string
+    {
+        return $this->mode;
+    }
+
     public function isShuffled(): bool
     {
-        return $this->shuffled;
+        return $this->mode !== 'canonical';
     }
 
     /** @return list<string> */

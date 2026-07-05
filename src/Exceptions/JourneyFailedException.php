@@ -15,7 +15,7 @@ final class JourneyFailedException extends RuntimeException
 
     public static function wrap(Journey $journey, Trail $trail, Throwable $cause): self
     {
-        $mode = $trail->isShuffled() ? 'shuffled' : 'canonical order';
+        $mode = $trail->mode() === 'canonical' ? 'canonical order' : $trail->mode();
         $at = $trail->steps() === []
             ? 'before any step ran'
             : sprintf('at step %d ("%s")', count($trail->steps()), $trail->steps()[count($trail->steps()) - 1]);

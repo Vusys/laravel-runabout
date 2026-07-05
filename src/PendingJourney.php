@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Vusys\Runabout;
 
 use Closure;
+use Generator;
 use Illuminate\Support\Facades\DB;
+use Vusys\Runabout\Exceptions\InvalidJourneyException;
+use Vusys\Runabout\Exceptions\OrderNotViableException;
 
 /**
  * Fluent executor returned by RunsJourneys::journey(). Runs the canonical
@@ -16,6 +19,10 @@ final class PendingJourney
     private int $shuffles = 10;
 
     private ?int $seed = null;
+
+    private int $repeatBias = 1;
+
+    private ?int $exhaustiveLimit = null;
 
     /** @param Closure(Closure): void $wrapper Wraps each trail; the default (from RunsJourneys) rolls back a database transaction. */
     public function __construct(
@@ -36,6 +43,31 @@ final class PendingJourney
     public function seed(int $seed): self
     {
         $this->seed = $seed;
+
+        return $this;
+    }
+
+    /**
+     * Bias the shuffled picker toward repeatable steps: each repeatable
+     * step's weight is multiplied by $bias. Re-running steps is how
+     * idempotency, replace-logic, and counter bugs surface, so this mode
+     * finds them in far fewer trails than uniform shuffling.
+     */
+    public function repeatHeavy(int $bias = 5): self
+    {
+        $this->repeatBias = max(1, $bias);
+
+        return $this;
+    }
+
+    /**
+     * Run every valid ordering of the journey's steps (each step once)
+     * instead of sampling shuffles. Only sensible for small journeys: the
+     * orderings grow factorially, so anything beyond $limit is refused.
+     */
+    public function exhaustive(int $limit = 720): self
+    {
+        $this->exhaustiveLimit = $limit;
 
         return $this;
     }
@@ -83,6 +115,12 @@ final class PendingJourney
     {
         $runner = new JourneyRunner;
 
+        if ($this->exhaustiveLimit !== null) {
+            $this->runExhaustive($runner, $this->exhaustiveLimit);
+
+            return;
+        }
+
         $replaySeed = $this->seed ?? $this->seedFromEnvironment();
 
         if ($replaySeed !== null) {
@@ -101,8 +139,63 @@ final class PendingJourney
     private function trail(JourneyRunner $runner, int $seed, bool $shuffle): void
     {
         ($this->wrapper)(function () use ($runner, $seed, $shuffle): void {
-            $runner->run($this->journey, $seed, $shuffle, $this->http);
+            $runner->run($this->journey, $seed, $shuffle, $this->http, $this->repeatBias);
         });
+    }
+
+    private function runExhaustive(JourneyRunner $runner, int $limit): void
+    {
+        $count = count($this->journey->steps());
+
+        $orderings = 1;
+        for ($i = 2; $i <= $count; $i++) {
+            $orderings *= $i;
+
+            if ($orderings > $limit) {
+                throw new InvalidJourneyException(sprintf(
+                    'Exhaustive mode would run more than %d orderings for the %d steps of %s. Shrink the journey or raise the limit: exhaustive(limit: ...).',
+                    $limit,
+                    $count,
+                    $this->journey::class,
+                ));
+            }
+        }
+
+        $index = 0;
+
+        foreach ($this->permutations(range(0, $count - 1)) as $order) {
+            $seed = $this->deriveSeed($index++);
+
+            try {
+                ($this->wrapper)(function () use ($runner, $order, $seed): void {
+                    $runner->runOrder($this->journey, $order, $seed, $this->http);
+                });
+            } catch (OrderNotViableException) {
+                // Not every permutation satisfies the constraints; skip it.
+            }
+        }
+    }
+
+    /**
+     * @param  list<int>  $items
+     * @return Generator<int, list<int>>
+     */
+    private function permutations(array $items): Generator
+    {
+        if (count($items) <= 1) {
+            yield $items;
+
+            return;
+        }
+
+        foreach ($items as $i => $first) {
+            $rest = $items;
+            unset($rest[$i]);
+
+            foreach ($this->permutations(array_values($rest)) as $permutation) {
+                yield [$first, ...$permutation];
+            }
+        }
     }
 
     /**
