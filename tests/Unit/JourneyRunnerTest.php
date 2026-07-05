@@ -186,6 +186,64 @@ final class JourneyRunnerTest extends TestCase
         $this->assertSame(1, $journey->collections);
     }
 
+    public function test_assert_when_runs_only_the_branch_the_condition_selects(): void
+    {
+        $ran = [];
+
+        $journey = $this->journey([
+            Step::make('either way')
+                ->assertWhen(
+                    fn (Context $ctx): bool => true,
+                    function () use (&$ran): void {
+                        $ran[] = 'then';
+                    },
+                    fn () => Assert::fail('The otherwise branch must not run when the condition holds.'),
+                )
+                ->assertWhen(
+                    fn (Context $ctx): bool => false,
+                    fn () => Assert::fail('The then branch must not run when the condition fails.'),
+                    function () use (&$ran): void {
+                        $ran[] = 'otherwise';
+                    },
+                ),
+        ]);
+
+        (new JourneyRunner)->run($journey, seed: 1, shuffle: false);
+
+        $this->assertSame(['then', 'otherwise'], $ran);
+    }
+
+    public function test_assert_when_claims_nothing_when_the_condition_fails_and_otherwise_is_omitted(): void
+    {
+        $journey = $this->journey([
+            Step::make('quiet')->assertWhen(
+                fn (Context $ctx): bool => false,
+                fn () => Assert::fail('The then branch must not run when the condition fails.'),
+            ),
+        ]);
+
+        $trail = (new JourneyRunner)->run($journey, seed: 1, shuffle: false);
+
+        $this->assertSame(['quiet'], $trail->steps());
+    }
+
+    public function test_a_failing_assert_when_branch_fails_the_journey(): void
+    {
+        $journey = $this->journey([
+            Step::make('doomed')->assertWhen(
+                fn (Context $ctx): bool => true,
+                fn () => Assert::fail('the then branch is wrong'),
+            ),
+        ]);
+
+        try {
+            (new JourneyRunner)->run($journey, seed: 1, shuffle: false);
+            $this->fail('Expected the journey to fail.');
+        } catch (JourneyFailedException $e) {
+            $this->assertStringContainsString('the then branch is wrong', $e->getMessage());
+        }
+    }
+
     public function test_a_repeatable_step_can_tell_whether_it_ran_before(): void
     {
         /** @var ArrayObject<int, bool> $observed */

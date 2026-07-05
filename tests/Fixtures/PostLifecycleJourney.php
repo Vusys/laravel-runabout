@@ -115,16 +115,14 @@ final class PostLifecycleJourney extends Journey
                         $ctx->remember('archive rejected', true);
                     }
                 })
-                ->assert(function (Context $ctx): void {
-                    $post = $ctx->instance('post', Post::class)->refresh();
-
-                    // Deliberately weak: it accepts whatever the service did.
-                    // Guarding WHICH transitions are legal is the job of the
-                    // legalTransitions invariant.
-                    $ctx->get('archive rejected') === true
-                        ? Assert::assertNotSame('archived', $post->status)
-                        : Assert::assertSame('archived', $post->status);
-                }),
+                // Deliberately weak: it accepts whatever the service did.
+                // Guarding WHICH transitions are legal is the job of the
+                // legalTransitions invariant.
+                ->assertWhen(
+                    fn (Context $ctx): bool => $ctx->get('archive rejected') === true,
+                    fn (Context $ctx) => Assert::assertNotSame('archived', $ctx->instance('post', Post::class)->refresh()->status),
+                    fn (Context $ctx) => Assert::assertSame('archived', $ctx->instance('post', Post::class)->refresh()->status),
+                ),
 
             Step::make('remove post')
                 ->after('draft post')

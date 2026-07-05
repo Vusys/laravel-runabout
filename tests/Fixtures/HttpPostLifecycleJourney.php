@@ -67,16 +67,15 @@ final class HttpPostLifecycleJourney extends Journey
                 ->repeatable()
                 ->act(fn (Context $ctx): TestResponse => $ctx->as($ctx->pick(self::VOTERS))
                     ->postJson(sprintf('/posts/%d/vote', $ctx->integer('post id')), ['value' => $ctx->pick([1, -1])]))
-                ->assert(function (Context $ctx): void {
-                    $post = $this->post($ctx);
-
-                    if ($post->status === 'locked') {
-                        $ctx->lastResponse()->assertStatus(409);
-                    } else {
-                        $ctx->lastResponse()->assertCreated();
-                        Assert::assertGreaterThan(0, $post->votes()->count());
-                    }
-                }),
+                ->assertWhen(
+                    fn (Context $ctx): bool => $this->post($ctx)->status === 'locked',
+                    fn (Context $ctx) => $ctx->lastResponse()->assertStatus(409),
+                    fn (Context $ctx) => $ctx->lastResponse()->assertCreated(),
+                )
+                ->assertWhen(
+                    fn (Context $ctx): bool => $this->post($ctx)->status !== 'locked',
+                    fn (Context $ctx) => Assert::assertGreaterThan(0, $this->post($ctx)->votes()->count()),
+                ),
 
             Step::make('lock post')
                 ->after('publish post')

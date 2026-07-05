@@ -49,6 +49,23 @@ final class Step
         return $this;
     }
 
+    /**
+     * A conditional assertion: when $condition holds, $then must pass; otherwise
+     * $otherwise must pass (or, when omitted, the step claims nothing).
+     *
+     * @param  Closure(Context): bool  $condition
+     * @param  Closure(Context): mixed  $then
+     * @param  Closure(Context): mixed|null  $otherwise
+     */
+    public function assertWhen(Closure $condition, Closure $then, ?Closure $otherwise = null): self
+    {
+        $this->assertions[] = fn (Context $context): mixed => $condition($context)
+            ? $then($context)
+            : $otherwise?->__invoke($context);
+
+        return $this;
+    }
+
     /** @param Closure(Context): bool $fn The step is only eligible to run while this returns true. */
     public function when(Closure $fn): self
     {

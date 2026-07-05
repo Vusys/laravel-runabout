@@ -155,12 +155,19 @@ This is not a hypothetical: the package's own test suite plants five bugs of thi
 Step::make('score criterion')
     ->act(fn (Context $ctx) => ...)          // do the thing (service call, HTTP request, job dispatch)
     ->assert(fn (Context $ctx) => ...)       // may be called multiple times; runs after the act
+    ->assertWhen(                            // conditional assertion, in the spirit of Laravel's when()
+        fn (Context $ctx): bool => ...,      //   truth about the observed state
+        fn (Context $ctx) => ...,            //   must pass when the condition holds
+        fn (Context $ctx) => ...,            //   must pass otherwise — omit it and the step claims nothing
+    )
     ->after('start review')                  // sugar: only eligible once these steps have run
     ->when(fn (Context $ctx) => ...)         // raw precondition: eligible only while this is true
     ->repeatable(max: 5)                     // may run again after completing (null/omitted max = unbounded)
     ->weight(3)                              // picked 3x as often as a weight-1 step when both are eligible
     ->teardown(fn (Context $ctx) => ...);    // cleanup, registered per execution
 ```
+
+Because a shuffled trail decides what state a step observes, assertions on repeatable steps are often conditional: voting on a published post must succeed, voting on a locked one must be rejected, and the shuffler picks which you get. `assertWhen()` keeps that as three small declarative closures instead of an `if`/`else` inside one assert body. Assertions still run in the order they were declared, and `assert()` and `assertWhen()` mix freely on one step — genuinely n-way logic is usually still clearer as a single `assert()` with control flow.
 
 The shuffled runner picks randomly among *currently eligible* steps until every step has run at least once. A journey whose constraints can strand it (no step eligible but some never ran) fails loudly as a deadlock, naming the steps that never ran; a journey that repeats forever is cut off as a runaway.
 
@@ -206,13 +213,11 @@ Step::make('cast vote')
     ->repeatable()
     ->act(fn (Context $ctx) => $ctx->as($ctx->pick(['ana', 'ben', 'cai']))
         ->postJson(sprintf('/posts/%d/vote', $ctx->integer('post id')), ['value' => $ctx->pick([1, -1])]))
-    ->assert(function (Context $ctx): void {
-        $post = Post::query()->findOrFail($ctx->integer('post id'));
-
-        $post->status === 'locked'
-            ? $ctx->lastResponse()->assertStatus(409)
-            : $ctx->lastResponse()->assertCreated();
-    }),
+    ->assertWhen(
+        fn (Context $ctx): bool => Post::query()->findOrFail($ctx->integer('post id'))->status === 'locked',
+        fn (Context $ctx) => $ctx->lastResponse()->assertStatus(409),
+        fn (Context $ctx) => $ctx->lastResponse()->assertCreated(),
+    ),
 ```
 
 Every request made through `$ctx->as('name')` is authenticated as that actor's user, so a journey can hop freely between participants. Actors proxy the full set of test HTTP verbs (`get`, `getJson`, `post`, `postJson`, `put`, `putJson`, `patch`, `patchJson`, `delete`, `deleteJson`), and `$ctx->lastResponse()` holds the most recent `TestResponse`.
