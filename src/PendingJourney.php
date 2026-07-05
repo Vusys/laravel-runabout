@@ -20,6 +20,7 @@ final class PendingJourney
     public function __construct(
         private readonly Journey $journey,
         private readonly Closure $wrapper,
+        private readonly ?HttpDriver $http = null,
     ) {}
 
     /** How many seeded shuffled trails to run after the canonical one. */
@@ -60,7 +61,7 @@ final class PendingJourney
     private function trail(JourneyRunner $runner, int $seed, bool $shuffle): void
     {
         ($this->wrapper)(function () use ($runner, $seed, $shuffle): void {
-            $runner->run($this->journey, $seed, $shuffle);
+            $runner->run($this->journey, $seed, $shuffle, $this->http);
         });
     }
 

@@ -21,10 +21,10 @@ final class JourneyRunner
     private const int TICK_MULTIPLIER = 25;
 
     /** @throws JourneyFailedException */
-    public function run(Journey $journey, int $seed, bool $shuffle = true): Trail
+    public function run(Journey $journey, int $seed, bool $shuffle = true, ?HttpDriver $http = null): Trail
     {
         $steps = $this->validated($journey);
-        $context = new Context(new Randomizer(new Mt19937($seed)));
+        $context = new Context(new Randomizer(new Mt19937($seed)), $http);
         $trail = new Trail($seed, $shuffle);
 
         $failure = null;

@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Vusys\Runabout;
 
 use Closure;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Testing\TestResponse;
 use Random\Randomizer;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The mutable bag threaded through a single trail: remembered values, run
@@ -23,7 +26,16 @@ final class Context
     /** @var list<Closure> */
     private array $deferred = [];
 
-    public function __construct(private readonly Randomizer $randomizer) {}
+    /** @var array<string, Actor> */
+    private array $actors = [];
+
+    /** @var TestResponse<Response>|null */
+    private ?TestResponse $lastResponse = null;
+
+    public function __construct(
+        private readonly Randomizer $randomizer,
+        private readonly ?HttpDriver $http = null,
+    ) {}
 
     public function remember(string $key, mixed $value): mixed
     {
@@ -110,6 +122,58 @@ final class Context
     public function ranBefore(string $step): bool
     {
         return $this->timesRan($step) > 0;
+    }
+
+    /**
+     * Register a named actor for the rest of the trail. Requests made through
+     * the returned Actor are authenticated as this user.
+     */
+    public function actingAs(Authenticatable $user, string $name): Actor
+    {
+        if (! $this->http instanceof HttpDriver) {
+            throw new RuntimeException(
+                'No HTTP driver is bound to this context. Actors are available when the journey runs through RunsJourneys::journey() on a Laravel test case.',
+            );
+        }
+
+        return $this->actors[$name] = new Actor($name, $user, $this->http, $this);
+    }
+
+    /** Retrieve a previously registered actor: $ctx->as('manager')->postJson(...). */
+    public function as(string $name): Actor
+    {
+        if (! isset($this->actors[$name])) {
+            throw new RuntimeException($this->actors === []
+                ? sprintf('No actor named "%s" is registered. Register actors with $ctx->actingAs($user, \'%s\').', $name, $name)
+                : sprintf('No actor named "%s" is registered. Known actors: %s.', $name, implode(', ', array_keys($this->actors))));
+        }
+
+        return $this->actors[$name];
+    }
+
+    /**
+     * The response of the most recent actor request in this trail.
+     *
+     * @return TestResponse<Response>
+     */
+    public function lastResponse(): TestResponse
+    {
+        if (! $this->lastResponse instanceof TestResponse) {
+            throw new RuntimeException('No actor has made a request yet in this trail.');
+        }
+
+        return $this->lastResponse;
+    }
+
+    /**
+     * @internal
+     *
+     * @param  TestResponse<Response>  $response
+     * @return TestResponse<Response>
+     */
+    public function rememberResponse(TestResponse $response): TestResponse
+    {
+        return $this->lastResponse = $response;
     }
 
     /** Register cleanup to run LIFO at the end of the trail, even on failure. */
