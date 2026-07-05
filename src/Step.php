@@ -23,9 +23,7 @@ final class Step
 
     private ?Closure $teardown = null;
 
-    private function __construct(private readonly string $name)
-    {
-    }
+    private function __construct(private readonly string $name) {}
 
     public static function make(string $name): self
     {

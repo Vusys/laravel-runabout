@@ -13,7 +13,7 @@ trait RunsJourneys
     /** @param class-string<Journey>|Journey $journey */
     protected function journey(string|Journey $journey): PendingJourney
     {
-        $journey = is_string($journey) ? new $journey() : $journey;
+        $journey = is_string($journey) ? new $journey : $journey;
 
         return new PendingJourney($journey, $this->wrapTrail(...));
     }

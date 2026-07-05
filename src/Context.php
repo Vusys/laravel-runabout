@@ -22,9 +22,7 @@ final class Context
     /** @var list<Closure> */
     private array $deferred = [];
 
-    public function __construct(private readonly Randomizer $randomizer)
-    {
-    }
+    public function __construct(private readonly Randomizer $randomizer) {}
 
     public function remember(string $key, mixed $value): mixed
     {

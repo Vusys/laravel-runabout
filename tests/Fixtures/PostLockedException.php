@@ -6,6 +6,4 @@ namespace Vusys\Runabout\Tests\Fixtures;
 
 use RuntimeException;
 
-final class PostLockedException extends RuntimeException
-{
-}
+final class PostLockedException extends RuntimeException {}

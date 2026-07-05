@@ -12,8 +12,7 @@ final class Invariant
     private function __construct(
         private readonly string $name,
         private readonly Closure $check,
-    ) {
-    }
+    ) {}
 
     /** @param Closure(Context): void $check */
     public static function make(string $name, Closure $check): self

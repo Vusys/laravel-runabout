@@ -18,7 +18,7 @@ final class JourneyRunnerTest extends TestCase
 {
     public function test_the_same_seed_produces_the_same_trail(): void
     {
-        $runner = new JourneyRunner();
+        $runner = new JourneyRunner;
 
         $first = $runner->run($this->independentJourney(), seed: 12345)->steps();
         $second = $runner->run($this->independentJourney(), seed: 12345)->steps();
@@ -28,7 +28,7 @@ final class JourneyRunnerTest extends TestCase
 
     public function test_different_seeds_explore_different_orders(): void
     {
-        $runner = new JourneyRunner();
+        $runner = new JourneyRunner;
 
         $trails = [];
         for ($seed = 1; $seed <= 10; $seed++) {
@@ -40,7 +40,7 @@ final class JourneyRunnerTest extends TestCase
 
     public function test_after_constraints_hold_in_every_shuffle(): void
     {
-        $runner = new JourneyRunner();
+        $runner = new JourneyRunner;
 
         $journey = $this->journey([
             Step::make('first'),
@@ -59,7 +59,7 @@ final class JourneyRunnerTest extends TestCase
 
     public function test_canonical_mode_runs_steps_in_declared_order(): void
     {
-        $runner = new JourneyRunner();
+        $runner = new JourneyRunner;
 
         $trail = $runner->run($this->independentJourney(), seed: 1, shuffle: false);
 
@@ -74,7 +74,7 @@ final class JourneyRunnerTest extends TestCase
         ]);
 
         try {
-            (new JourneyRunner())->run($journey, seed: 1);
+            (new JourneyRunner)->run($journey, seed: 1);
             $this->fail('Expected a deadlock failure.');
         } catch (JourneyFailedException $e) {
             $this->assertStringContainsString('Deadlock', $e->getMessage());
@@ -86,14 +86,14 @@ final class JourneyRunnerTest extends TestCase
     {
         $this->expectException(InvalidJourneyException::class);
 
-        (new JourneyRunner())->run($this->journey([Step::make('twin'), Step::make('twin')]), seed: 1);
+        (new JourneyRunner)->run($this->journey([Step::make('twin'), Step::make('twin')]), seed: 1);
     }
 
     public function test_unknown_after_dependencies_are_rejected(): void
     {
         $this->expectException(InvalidJourneyException::class);
 
-        (new JourneyRunner())->run($this->journey([Step::make('orphan')->after('missing')]), seed: 1);
+        (new JourneyRunner)->run($this->journey([Step::make('orphan')->after('missing')]), seed: 1);
     }
 
     public function test_invariants_run_after_every_step(): void
@@ -107,7 +107,7 @@ final class JourneyRunnerTest extends TestCase
             })],
         );
 
-        $trail = (new JourneyRunner())->run($journey, seed: 7);
+        $trail = (new JourneyRunner)->run($journey, seed: 7);
 
         $this->assertSame(count($trail->steps()), $checks);
     }
@@ -120,7 +120,7 @@ final class JourneyRunnerTest extends TestCase
         );
 
         try {
-            (new JourneyRunner())->run($journey, seed: 1);
+            (new JourneyRunner)->run($journey, seed: 1);
             $this->fail('Expected the invariant to fail the journey.');
         } catch (JourneyFailedException $e) {
             $this->assertStringContainsString('Invariant "always broken" violated after step "harmless"', $e->getMessage());
@@ -154,7 +154,7 @@ final class JourneyRunnerTest extends TestCase
         ]);
 
         try {
-            (new JourneyRunner())->run($journey, seed: 1, shuffle: false);
+            (new JourneyRunner)->run($journey, seed: 1, shuffle: false);
             $this->fail('Expected the journey to fail.');
         } catch (JourneyFailedException) {
             $this->assertSame(['open a', 'open b', 'close b', 'close a'], $log);
@@ -177,7 +177,7 @@ final class JourneyRunnerTest extends TestCase
         // Find a seed whose trail repeats the repeatable step; seeds are deterministic, so this is stable.
         for ($seed = 1; $seed <= 50; $seed++) {
             $observed = [];
-            $trail = (new JourneyRunner())->run($journey, $seed);
+            $trail = (new JourneyRunner)->run($journey, $seed);
 
             if (count($trail->steps()) > 2) {
                 $this->assertFalse($observed[0], 'First execution must see ranBefore() === false.');
@@ -205,8 +205,7 @@ final class JourneyRunnerTest extends TestCase
             public function __construct(
                 private readonly array $steps,
                 private readonly array $invariants,
-            ) {
-            }
+            ) {}
 
             public function steps(): array
             {

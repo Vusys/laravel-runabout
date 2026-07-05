@@ -16,7 +16,7 @@ final class PostLifecycleJourney extends Journey
 {
     public function steps(): array
     {
-        $service = new PostService();
+        $service = new PostService;
 
         return [
             Step::make('create community')

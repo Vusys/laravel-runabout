@@ -20,8 +20,7 @@ final class PendingJourney
     public function __construct(
         private readonly Journey $journey,
         private readonly Closure $wrapper,
-    ) {
-    }
+    ) {}
 
     /** How many seeded shuffled trails to run after the canonical one. */
     public function shuffles(int $count): self
@@ -41,7 +40,7 @@ final class PendingJourney
 
     public function run(): void
     {
-        $runner = new JourneyRunner();
+        $runner = new JourneyRunner;
 
         $replaySeed = $this->seed ?? $this->seedFromEnvironment();
 

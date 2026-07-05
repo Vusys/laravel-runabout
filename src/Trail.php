@@ -13,8 +13,7 @@ final class Trail
     public function __construct(
         private readonly int $seed,
         private readonly bool $shuffled,
-    ) {
-    }
+    ) {}
 
     public function record(string $step): void
     {
