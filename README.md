@@ -278,6 +278,28 @@ $this->journey(PostLifecycleJourney::class)
 
 Repeat-heavy mode is the idempotency hunter: re-running steps is how replace-logic, counter, and quota bugs surface, and the bias finds them in far fewer trails than uniform shuffling (the package's test suite asserts exactly that). Exhaustive mode suits small journeys where you'd rather prove every ordering than sample.
 
+## Interleaving journeys
+
+The bug class nothing else reaches: each participant's journey is individually correct, but their *interaction* leaks state — the classic case being multi-tenant isolation enforced by query convention rather than by the database. Interleave mode merge-shuffles two or more journey instances into one trail:
+
+```php
+$this->interleave(new CommunityJourney('alpha'), new CommunityJourney('beta'))
+    ->shuffles(15)
+    ->run();
+```
+
+Each instance keeps its own context — remembered values, run history, actors — while sharing the trail's randomizer and teardown stack, so one seed still replays the whole merged trail. Every instance's invariants run after every step of *any* instance, which is what lets a tenant-isolation invariant declared on the journey police both tenants at once. Trail lines carry instance labels:
+
+```
+   1. A: found community
+   2. B: found community
+   3. B: draft post
+>  4. A: draft post
+Invariant "Community.posts_count matches its source data" violated after step "draft post": Community 1 has a stale cached posts_count: the column holds 2 but the source data gives 1.
+```
+
+The package's fixture plants exactly this bug — a cached `posts_count` refreshed by a query that forgot its community scope. With one community the scoped and unscoped counts are provably identical, so *no* single-instance trail can ever detect it; the suite asserts that 40 single-instance shuffles stay green while interleaved trails catch it immediately. The full design rationale lives in [docs/interleave-design.md](docs/interleave-design.md).
+
 ## Database reset between trails
 
 Each trail runs against fresh state. The default wraps every trail in a transaction on the default connection and rolls it back. When the code under test commits or manages transactions itself, opt into truncation; for anything else (multiple connections, external stores), supply your own wrapper:

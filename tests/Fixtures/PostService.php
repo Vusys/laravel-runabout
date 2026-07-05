@@ -6,6 +6,7 @@ namespace Vusys\Runabout\Tests\Fixtures;
 
 use Illuminate\Support\Facades\Date;
 use RuntimeException;
+use Vusys\Runabout\Tests\Fixtures\Models\Community;
 use Vusys\Runabout\Tests\Fixtures\Models\Post;
 
 final class PostService
@@ -48,6 +49,15 @@ final class PostService
      */
     public static bool $buggyReportQuota = false;
 
+    /**
+     * Planted bug: refreshing a community's cached posts_count uses a query
+     * that forgot its community scope, counting every community's posts.
+     * With a single community the scoped and unscoped counts are identical,
+     * so no single-instance trail can detect it — only a trail where a
+     * second community's journey interleaves.
+     */
+    public static bool $buggyGlobalPostCount = false;
+
     public static function reset(): void
     {
         self::$buggyRevote = false;
@@ -55,6 +65,20 @@ final class PostService
         self::$buggyArchiveGuard = false;
         self::$buggyVoteOnRemoved = false;
         self::$buggyReportQuota = false;
+        self::$buggyGlobalPostCount = false;
+    }
+
+    public function draft(Community $community, string $title): Post
+    {
+        $post = $community->posts()->create(['title' => $title]);
+
+        $count = self::$buggyGlobalPostCount
+            ? Post::query()->count()
+            : $community->posts()->count();
+
+        $community->update(['posts_count' => $count]);
+
+        return $post;
     }
 
     public function publish(Post $post): void

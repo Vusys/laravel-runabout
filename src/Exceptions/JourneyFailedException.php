@@ -21,15 +21,20 @@ final class JourneyFailedException extends RuntimeException
             : sprintf('at step %d ("%s")', count($trail->steps()), $trail->steps()[count($trail->steps()) - 1]);
 
         $message = sprintf(
-            "Journey %s failed (%s, seed %d) %s.\nTrail:\n%s\n%s\nReplay with RUNABOUT_SEED=%d.",
+            "Journey %s failed (%s, seed %d) %s.\nTrail:\n%s\n%s",
             $journeys,
             $mode,
             $trail->seed(),
             $at,
             $trail->describe(),
             $cause->getMessage(),
-            $trail->seed(),
         );
+
+        // The canonical order reproduces by simply running again; a seeded
+        // replay would run a shuffled trail instead and take a different path.
+        if ($trail->mode() !== 'canonical') {
+            $message .= sprintf("\nReplay with RUNABOUT_SEED=%d.", $trail->seed());
+        }
 
         $exception = new self($message, 0, $cause);
         $exception->trail = $trail;

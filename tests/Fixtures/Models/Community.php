@@ -10,10 +10,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int $id
  * @property string $name
+ * @property int $posts_count
  */
 final class Community extends Model
 {
     protected $guarded = [];
+
+    protected $casts = ['posts_count' => 'int'];
 
     /** @return HasMany<Post, $this> */
     public function posts(): HasMany

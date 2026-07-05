@@ -13,6 +13,7 @@ return new class extends Migration
         Schema::create('communities', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
+            $table->integer('posts_count')->default(0);
             $table->timestamps();
         });
 

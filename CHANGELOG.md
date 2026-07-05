@@ -15,4 +15,5 @@ All notable changes to `vusys/runabout` are documented here. The format follows 
 - Trail reset strategies: transaction rollback by default, `resetByTruncating(...tables)` opt-in, and `resetWith()` for bespoke wrappers.
 - Built-in invariant library: `Invariants::cachedColumnMatches()`, `Invariants::quotaBalances()`, `Invariants::legalTransitions()`, and `Invariants::trashedLeavesNoLiveChildren()`.
 - Execution modes: uniform shuffles, `repeatHeavy()` bias toward repeatable steps, per-step `weight()`, and bounded `exhaustive()` enumeration for small journeys.
-- Failure output with the full trail (repeat counts included), the failing step, the seed, and a one-line replay instruction.
+- Failure output with the full trail (repeat counts included), the failing step, the seed, and a one-line replay instruction on shuffled trails (canonical failures reproduce by re-running).
+- Interleave mode: `$this->interleave($a, $b)->shuffles(15)->run()` merge-shuffles several journey instances (own contexts and actors, shared seed and teardown stack) into one trail with cross-instance invariants — the mode built for tenant-isolation bugs no single journey can expose.
