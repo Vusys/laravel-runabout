@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout;
 
 use Closure;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Fluent executor returned by RunsJourneys::journey(). Runs the canonical
@@ -19,7 +20,7 @@ final class PendingJourney
     /** @param Closure(Closure): void $wrapper Wraps each trail; the default (from RunsJourneys) rolls back a database transaction. */
     public function __construct(
         private readonly Journey $journey,
-        private readonly Closure $wrapper,
+        private Closure $wrapper,
         private readonly ?HttpDriver $http = null,
     ) {}
 
@@ -37,6 +38,45 @@ final class PendingJourney
         $this->seed = $seed;
 
         return $this;
+    }
+
+    /**
+     * Replace the trail wrapper entirely — for apps that need a bespoke reset
+     * (multiple connections, external stores) instead of the transaction
+     * default or table truncation.
+     *
+     * @param  Closure(Closure): void  $wrapper
+     */
+    public function resetWith(Closure $wrapper): self
+    {
+        $this->wrapper = $wrapper;
+
+        return $this;
+    }
+
+    /**
+     * Reset by truncating the given tables after each trail instead of
+     * rolling back a transaction. Use when the code under test commits or
+     * manages transactions itself.
+     */
+    public function resetByTruncating(string ...$tables): self
+    {
+        return $this->resetWith(function (Closure $trail) use ($tables): void {
+            try {
+                $trail();
+            } finally {
+                $connection = DB::connection();
+                $connection->getSchemaBuilder()->disableForeignKeyConstraints();
+
+                try {
+                    foreach ($tables as $table) {
+                        $connection->table($table)->truncate();
+                    }
+                } finally {
+                    $connection->getSchemaBuilder()->enableForeignKeyConstraints();
+                }
+            }
+        });
     }
 
     public function run(): void
