@@ -144,6 +144,17 @@ final class PendingJourney
 
     public function run(): void
     {
+        $coverage = $this->coverageCollector();
+
+        $this->execute();
+
+        if ($coverage instanceof TrailCoverage) {
+            fwrite(STDERR, sprintf("\n[%s] trail coverage\n%s\n", $this->names(), $coverage->describe()));
+        }
+    }
+
+    private function execute(): void
+    {
         $runner = new JourneyRunner;
 
         $exhaustiveLimit = $this->exhaustiveLimit;
@@ -192,6 +203,24 @@ final class PendingJourney
         }
     }
 
+    /**
+     * When RUNABOUT_COVERAGE is set, collect every completed trail into an
+     * aggregate coverage summary, printed to STDERR once the run finishes.
+     * A failing run reports its failure instead — nothing is printed.
+     */
+    private function coverageCollector(): ?TrailCoverage
+    {
+        if (in_array(getenv('RUNABOUT_COVERAGE'), [false, '', '0'], true)) {
+            return null;
+        }
+
+        $coverage = new TrailCoverage;
+
+        $this->onTrail($coverage->record(...));
+
+        return $coverage;
+    }
+
     /** When RUNABOUT_VERBOSE is set, print every completed trail to STDERR (stdout is swallowed by the test runner). */
     private function registerVerbosePrinter(?int $total): void
     {
@@ -199,7 +228,7 @@ final class PendingJourney
             return;
         }
 
-        $names = implode(' + ', array_map(class_basename(...), $this->journeys));
+        $names = $this->names();
         $count = 0;
 
         $this->onTrail[] = function (Trail $trail) use ($names, $total, &$count): void {
@@ -214,6 +243,11 @@ final class PendingJourney
                 $trail->describe(markLast: false),
             ));
         };
+    }
+
+    private function names(): string
+    {
+        return implode(' + ', array_map(class_basename(...), $this->journeys));
     }
 
     private function runExhaustive(JourneyRunner $runner, int $limit): void

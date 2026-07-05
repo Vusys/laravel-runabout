@@ -376,11 +376,52 @@ $this->journey(PostLifecycleJourney::class)
     ->run();
 ```
 
+### Is the shuffle count buying coverage?
+
+Verbose output shows individual trails; the question it can't answer is the aggregate one — across all those trails, what did the run actually explore? Set `RUNABOUT_COVERAGE=1` and a green run ends with a summary on stderr:
+
+```
+[PostLifecycleJourney] trail coverage
+51 trails (1 canonical, 50 shuffled), 51 distinct orderings
+Step executions:
+  create community  51 runs in 51/51 trails
+  draft post        51 runs in 51/51 trails
+  publish post      51 runs in 51/51 trails
+  a new day dawns   51 runs in 51/51 trails
+  cast vote         111 runs in 51/51 trails
+  report post       154 runs in 51/51 trails
+  lock post         51 runs in 51/51 trails
+  archive post      51 runs in 51/51 trails
+  remove post       51 runs in 51/51 trails
+Orderings of step pairs never observed (18 of 72):
+  "draft post" before "create community"
+  "publish post" before "create community"
+  "publish post" before "draft post"
+  ...
+```
+
+Read the never-observed list against your constraints. Every pair above is impossible by design — each names a step running before its own prerequisite — so this run has genuinely explored every ordering its constraints allow. An *unconstrained* pair on that list is the finding: the shuffles never tried that ordering, and a bug hiding behind it is invisible at this shuffle count. Distinct orderings tell the same story from above — 51 trails producing 51 distinct orderings means the seeds aren't wasting trails re-walking the same path.
+
+The aggregation is a plain object, `TrailCoverage`, so you can also collect it yourself — across several runs, or to assert coverage properties in the test:
+
+```php
+$coverage = new TrailCoverage;
+
+$this->journey(PostLifecycleJourney::class)
+    ->shuffles(50)
+    ->onTrail($coverage->record(...))
+    ->run();
+
+$this->assertSame(0, $coverage->timesBefore('publish post', 'draft post'));
+$this->assertGreaterThan(40, $coverage->distinctOrderings());
+```
+
 ## Environment variables
 
 - `RUNABOUT_SEED=923206350` — replay one exact shuffled trail. Every failure message prints this line for you.
 - `RUNABOUT_RANDOMIZE=1` — explore fresh random seeds instead of the stable derived ones. Meant for a nightly CI job that hunts orderings the fixed seeds never visit; any failure it finds prints its seed, so it replays exactly.
 - `RUNABOUT_VERBOSE=1` — print every completed trail to stderr as it runs.
+- `RUNABOUT_COVERAGE=1` — print an aggregate coverage summary to stderr when a run finishes: executions per step, distinct orderings, and the step-pair orderings no trail explored.
 
 By default seeds are derived deterministically from the journey class and trail index, so ordinary CI runs are stable from commit to commit.
 
