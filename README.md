@@ -327,10 +327,35 @@ $this->journey(PostLifecycleJourney::class)
 
 You can also override `wrapTrail()` on your test case to change the default for every journey it runs.
 
+## Watching the trails
+
+A passing run is silent by default. To see what the shuffler actually explored, set `RUNABOUT_VERBOSE=1` and every completed trail is printed to stderr as it finishes:
+
+```
+[PostLifecycleJourney] trail 3/16 (shuffled, seed 923206352)
+   1. create community
+   2. draft post
+   3. report post
+   4. publish post
+   5. cast vote
+   6. cast vote (run 2)
+   ...
+```
+
+For anything programmatic — collecting trails, counting how often a step ran, feeding a coverage report — register a callback instead; it receives each completed `Trail` in every mode (failing trails already describe themselves in the failure output):
+
+```php
+$this->journey(PostLifecycleJourney::class)
+    ->shuffles(25)
+    ->onTrail(fn (Trail $trail) => $log[] = $trail->steps())
+    ->run();
+```
+
 ## Environment variables
 
 - `RUNABOUT_SEED=923206350` — replay one exact shuffled trail. Every failure message prints this line for you.
 - `RUNABOUT_RANDOMIZE=1` — explore fresh random seeds instead of the stable derived ones. Meant for a nightly CI job that hunts orderings the fixed seeds never visit; any failure it finds prints its seed, so it replays exactly.
+- `RUNABOUT_VERBOSE=1` — print every completed trail to stderr as it runs.
 
 By default seeds are derived deterministically from the journey class and trail index, so ordinary CI runs are stable from commit to commit.
 

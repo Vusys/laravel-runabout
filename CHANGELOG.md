@@ -10,6 +10,7 @@ All notable changes to `vusys/runabout` are documented here. The format follows 
 - Precondition-based ordering engine with `after()` sugar, `when()` preconditions, `repeatable()` steps, and clear deadlock/runaway failures.
 - `Step::assertWhen($condition, $then, $otherwise = null)`: a conditional assertion in the spirit of Laravel's `when()` — when the condition holds `$then` must pass, otherwise `$otherwise` must pass (or the step claims nothing when it's omitted).
 - `Context::push($key, $value)` and `Context::list($key)`: remembered lists without the read-append-write dance — journeys that create several of a thing can accumulate them with one call per step.
+- Trail observability: `->onTrail(fn (Trail $trail) => ...)` receives every completed trail in every mode, and `RUNABOUT_VERBOSE=1` prints each one to stderr as it finishes — passing runs are no longer a black box.
 - Seed derivation per journey and trail index, `RUNABOUT_SEED` replay, and `RUNABOUT_RANDOMIZE=1` fresh-seed exploration for nightly jobs.
 - Per-execution teardown stack: `Step::teardown()` and `$ctx->defer()`, run LIFO at the end of the trail, guaranteed on failure and never masking the primary failure.
 - Actors and HTTP: register named actors with `$ctx->actingAs($user, 'name')` and make authenticated requests through `$ctx->as('name')->postJson(...)`; the most recent response is available as `$ctx->lastResponse()`.

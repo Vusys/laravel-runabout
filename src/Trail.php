@@ -43,7 +43,8 @@ final class Trail
         return $this->steps;
     }
 
-    public function describe(): string
+    /** @param bool $markLast Point at the last step with a ">" marker — where the failure output points at the failing step. */
+    public function describe(bool $markLast = true): string
     {
         if ($this->steps === []) {
             return '  (no steps ran)';
@@ -55,7 +56,7 @@ final class Trail
 
         foreach ($this->steps as $index => $step) {
             $runs[$step] = ($runs[$step] ?? 0) + 1;
-            $marker = $index === $last ? '>' : ' ';
+            $marker = $markLast && $index === $last ? '>' : ' ';
             $label = $runs[$step] > 1 ? sprintf('%s (run %d)', $step, $runs[$step]) : $step;
             $lines[] = sprintf('%s %2d. %s', $marker, $index + 1, $label);
         }

@@ -24,6 +24,19 @@ final class TrailTest extends TestCase
         );
     }
 
+    public function test_describe_can_leave_the_last_step_unmarked_for_passing_trails(): void
+    {
+        $trail = new Trail(123, 'shuffled');
+        $trail->record('publish post');
+        $trail->record('cast vote');
+
+        $this->assertSame(
+            '   1. publish post'.PHP_EOL.
+            '   2. cast vote',
+            $trail->describe(markLast: false),
+        );
+    }
+
     public function test_describe_handles_an_empty_trail(): void
     {
         $this->assertSame('  (no steps ran)', (new Trail(1, 'canonical'))->describe());

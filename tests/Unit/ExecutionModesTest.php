@@ -7,11 +7,14 @@ namespace Vusys\Runabout\Tests\Unit;
 use ArrayObject;
 use Closure;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
+use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Journey;
 use Vusys\Runabout\JourneyRunner;
 use Vusys\Runabout\PendingJourney;
 use Vusys\Runabout\Step;
+use Vusys\Runabout\Trail;
 
 final class ExecutionModesTest extends TestCase
 {
@@ -72,6 +75,74 @@ final class ExecutionModesTest extends TestCase
         $this->expectExceptionMessage('Exhaustive mode would run more than 720 orderings');
 
         $this->pending($journey)->exhaustive()->run();
+    }
+
+    public function test_on_trail_observes_every_completed_trail(): void
+    {
+        $trails = [];
+
+        $journey = $this->journey([Step::make('a'), Step::make('b'), Step::make('c')]);
+
+        $this->pending($journey)
+            ->shuffles(5)
+            ->onTrail(function (Trail $trail) use (&$trails): void {
+                $trails[] = $trail;
+            })
+            ->run();
+
+        $this->assertCount(6, $trails);
+        $this->assertSame('canonical', $trails[0]->mode());
+
+        foreach (array_slice($trails, 1) as $trail) {
+            $this->assertSame('shuffled', $trail->mode());
+            $this->assertCount(3, $trail->steps());
+        }
+    }
+
+    public function test_on_trail_observes_each_valid_exhaustive_ordering(): void
+    {
+        $trails = [];
+
+        $journey = $this->journey([
+            Step::make('a'),
+            Step::make('b')->after('a'),
+            Step::make('c'),
+        ]);
+
+        $this->pending($journey)
+            ->exhaustive()
+            ->onTrail(function (Trail $trail) use (&$trails): void {
+                $trails[] = $trail;
+            })
+            ->run();
+
+        $this->assertCount(3, $trails);
+
+        foreach ($trails as $trail) {
+            $this->assertSame('exhaustive', $trail->mode());
+        }
+    }
+
+    public function test_on_trail_does_not_observe_a_failed_trail(): void
+    {
+        $observed = 0;
+
+        $journey = $this->journey([
+            Step::make('doomed')->act(function (): never {
+                throw new RuntimeException('boom');
+            }),
+        ]);
+
+        try {
+            $this->pending($journey)
+                ->onTrail(function () use (&$observed): void {
+                    $observed++;
+                })
+                ->run();
+            $this->fail('Expected the journey to fail.');
+        } catch (JourneyFailedException) {
+            $this->assertSame(0, $observed);
+        }
     }
 
     public function test_randomize_env_explores_fresh_seeds_each_run(): void

@@ -24,6 +24,9 @@ final class PendingJourney
 
     private ?int $exhaustiveLimit = null;
 
+    /** @var list<Closure(Trail): void> */
+    private array $onTrail = [];
+
     /** @var non-empty-list<Journey> */
     private readonly array $journeys;
 
@@ -87,6 +90,20 @@ final class PendingJourney
     }
 
     /**
+     * Observe every completed trail: the callback receives each Trail right
+     * after its state has been reset, in every mode. Failed trails are not
+     * observed — they already describe themselves in the failure output.
+     *
+     * @param  Closure(Trail): void  $callback
+     */
+    public function onTrail(Closure $callback): self
+    {
+        $this->onTrail[] = $callback;
+
+        return $this;
+    }
+
+    /**
      * Replace the trail wrapper entirely — for apps that need a bespoke reset
      * (multiple connections, external stores) instead of the transaction
      * default or table truncation.
@@ -129,8 +146,11 @@ final class PendingJourney
     {
         $runner = new JourneyRunner;
 
-        if ($this->exhaustiveLimit !== null) {
-            $this->runExhaustive($runner, $this->exhaustiveLimit);
+        $exhaustiveLimit = $this->exhaustiveLimit;
+
+        if ($exhaustiveLimit !== null) {
+            $this->registerVerbosePrinter(total: null);
+            $this->runExhaustive($runner, $exhaustiveLimit);
 
             return;
         }
@@ -138,11 +158,13 @@ final class PendingJourney
         $replaySeed = $this->seed ?? $this->seedFromEnvironment();
 
         if ($replaySeed !== null) {
+            $this->registerVerbosePrinter(total: 1);
             $this->trail($runner, $replaySeed, shuffle: true);
 
             return;
         }
 
+        $this->registerVerbosePrinter(total: 1 + $this->shuffles);
         $this->trail($runner, $this->deriveSeed(0), shuffle: false);
 
         for ($i = 1; $i <= $this->shuffles; $i++) {
@@ -152,9 +174,46 @@ final class PendingJourney
 
     private function trail(JourneyRunner $runner, int $seed, bool $shuffle): void
     {
-        ($this->wrapper)(function () use ($runner, $seed, $shuffle): void {
-            $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias);
+        $trail = null;
+
+        ($this->wrapper)(function () use ($runner, $seed, $shuffle, &$trail): void {
+            $trail = $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias);
         });
+
+        if ($trail instanceof Trail) {
+            $this->notify($trail);
+        }
+    }
+
+    private function notify(Trail $trail): void
+    {
+        foreach ($this->onTrail as $callback) {
+            $callback($trail);
+        }
+    }
+
+    /** When RUNABOUT_VERBOSE is set, print every completed trail to STDERR (stdout is swallowed by the test runner). */
+    private function registerVerbosePrinter(?int $total): void
+    {
+        if (in_array(getenv('RUNABOUT_VERBOSE'), [false, '', '0'], true)) {
+            return;
+        }
+
+        $names = implode(' + ', array_map(class_basename(...), $this->journeys));
+        $count = 0;
+
+        $this->onTrail[] = function (Trail $trail) use ($names, $total, &$count): void {
+            $count++;
+
+            fwrite(STDERR, sprintf(
+                "\n[%s] trail %s (%s, seed %d)\n%s\n",
+                $names,
+                $total === null ? (string) $count : sprintf('%d/%d', $count, $total),
+                $trail->mode(),
+                $trail->seed(),
+                $trail->describe(markLast: false),
+            ));
+        };
     }
 
     private function runExhaustive(JourneyRunner $runner, int $limit): void
@@ -185,12 +244,18 @@ final class PendingJourney
         foreach ($this->permutations(range(0, $count - 1)) as $order) {
             $seed = $this->deriveSeed($index++);
 
+            $trail = null;
+
             try {
-                ($this->wrapper)(function () use ($runner, $journey, $order, $seed): void {
-                    $runner->runOrder($journey, $order, $seed, $this->http);
+                ($this->wrapper)(function () use ($runner, $journey, $order, $seed, &$trail): void {
+                    $trail = $runner->runOrder($journey, $order, $seed, $this->http);
                 });
             } catch (OrderNotViableException) {
                 // Not every permutation satisfies the constraints; skip it.
+            }
+
+            if ($trail instanceof Trail) {
+                $this->notify($trail);
             }
         }
     }
