@@ -6,14 +6,14 @@ namespace Vusys\Runabout\Exceptions;
 
 use RuntimeException;
 use Throwable;
-use Vusys\Runabout\Journey;
 use Vusys\Runabout\Trail;
 
 final class JourneyFailedException extends RuntimeException
 {
     private Trail $trail;
 
-    public static function wrap(Journey $journey, Trail $trail, Throwable $cause): self
+    /** @param string $journeys The journey class, or "A=ClassA + B=ClassB" for interleaved runs. */
+    public static function wrap(string $journeys, Trail $trail, Throwable $cause): self
     {
         $mode = $trail->mode() === 'canonical' ? 'canonical order' : $trail->mode();
         $at = $trail->steps() === []
@@ -22,7 +22,7 @@ final class JourneyFailedException extends RuntimeException
 
         $message = sprintf(
             "Journey %s failed (%s, seed %d) %s.\nTrail:\n%s\n%s\nReplay with RUNABOUT_SEED=%d.",
-            $journey::class,
+            $journeys,
             $mode,
             $trail->seed(),
             $at,

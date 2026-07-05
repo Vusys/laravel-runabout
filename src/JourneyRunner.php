@@ -31,19 +31,34 @@ final class JourneyRunner
      */
     public function run(Journey $journey, int $seed, bool $shuffle = true, ?HttpDriver $http = null, int $repeatBias = 1): Trail
     {
-        $steps = $this->validated($journey);
-        $mode = $shuffle ? ($repeatBias > 1 ? 'repeat-heavy' : 'shuffled') : 'canonical';
+        return $this->runInterleaved([$journey], $seed, $shuffle, $http, $repeatBias);
+    }
 
-        return $this->trail($journey, $steps, $seed, $mode, $http, function (array $steps, array $invariants, Context $context, Trail $trail) use ($shuffle, $repeatBias): void {
+    /**
+     * Run several journey instances merge-shuffled into one trail. Each
+     * instance keeps its own context (values, history, actors); the trail's
+     * randomizer and teardown stack are shared. See docs/interleave-design.md.
+     *
+     * @param  non-empty-list<Journey>  $journeys
+     *
+     * @throws JourneyFailedException
+     */
+    public function runInterleaved(array $journeys, int $seed, bool $shuffle = true, ?HttpDriver $http = null, int $repeatBias = 1): Trail
+    {
+        $mode = $shuffle ? ($repeatBias > 1 ? 'repeat-heavy' : 'shuffled') : 'canonical';
+        $randomizer = new Randomizer(new Mt19937($seed));
+        $instances = $this->instances($journeys, $randomizer, $http);
+
+        return $this->trail($instances, $seed, $mode, function (Trail $trail) use ($instances, $shuffle, $randomizer, $repeatBias): void {
             $shuffle
-                ? $this->runShuffled($steps, $invariants, $context, $trail, $repeatBias)
-                : $this->runCanonical($steps, $invariants, $context, $trail);
+                ? $this->runShuffled($instances, $randomizer, $trail, $repeatBias)
+                : $this->runCanonical($instances, $trail);
         });
     }
 
     /**
-     * Run the steps in one explicit order (by declared index), skipping the
-     * order entirely if a step is not enabled when its slot comes up.
+     * Run one journey's steps in one explicit order (by declared index),
+     * abandoning the order if a step is not enabled when its slot comes up.
      *
      * @param  list<int>  $order
      *
@@ -52,53 +67,80 @@ final class JourneyRunner
      */
     public function runOrder(Journey $journey, array $order, int $seed, ?HttpDriver $http = null): Trail
     {
-        $steps = $this->validated($journey);
+        $randomizer = new Randomizer(new Mt19937($seed));
+        $instances = $this->instances([$journey], $randomizer, $http);
+        $instance = $instances[0];
 
-        return $this->trail($journey, $steps, $seed, 'exhaustive', $http, function (array $steps, array $invariants, Context $context, Trail $trail) use ($order): void {
+        return $this->trail($instances, $seed, 'exhaustive', function (Trail $trail) use ($instance, $order): void {
             foreach ($order as $index) {
-                $step = $steps[$index];
+                $step = $instance->steps[$index];
 
-                if (! $step->isEnabled($context)) {
+                if (! $step->isEnabled($instance->context)) {
                     throw new OrderNotViableException($step->name());
                 }
 
-                $this->executeStep($step, $invariants, $context, $trail);
+                $this->executeStep($instance, $step, $instance->invariants, $trail);
             }
         });
     }
 
     /**
-     * Shared harness: build the context, run the body, drain teardowns even
-     * on failure, and wrap any failure with the trail that produced it.
-     *
-     * @param  list<Step>  $steps
-     * @param  'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'  $mode
-     * @param  Closure(list<Step>, list<Invariant>, Context, Trail): void  $body
+     * @param  non-empty-list<Journey>  $journeys
+     * @return non-empty-list<JourneyInstance>
      */
-    private function trail(Journey $journey, array $steps, int $seed, string $mode, ?HttpDriver $http, Closure $body): Trail
+    private function instances(array $journeys, Randomizer $randomizer, ?HttpDriver $http): array
     {
-        // Collected once per trail so a stateful invariant (one that tracks
-        // observations across steps) lives exactly as long as the trail.
-        $invariants = $journey->invariants();
-        $context = new Context(new Randomizer(new Mt19937($seed)), $http);
+        $deferred = new DeferredStack;
+        $labelled = count($journeys) > 1;
+        $instances = [];
+
+        foreach ($journeys as $i => $journey) {
+            $instances[] = new JourneyInstance(
+                journey: $journey,
+                label: $labelled ? chr(65 + $i) : null,
+                steps: $this->validated($journey),
+                // Collected once per trail so a stateful invariant (one that
+                // tracks observations across steps) lives exactly as long as
+                // the trail.
+                invariants: $journey->invariants(),
+                context: new Context($randomizer, $http, $deferred),
+            );
+        }
+
+        return $instances;
+    }
+
+    /**
+     * Shared harness: run the body, drain teardowns even on failure, and wrap
+     * any failure with the trail that produced it.
+     *
+     * @param  non-empty-list<JourneyInstance>  $instances
+     * @param  'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'  $mode
+     * @param  Closure(Trail): void  $body
+     */
+    private function trail(array $instances, int $seed, string $mode, Closure $body): Trail
+    {
+        $description = implode(' + ', array_map(fn (JourneyInstance $instance): string => $instance->describe(), $instances));
         $trail = new Trail($seed, $mode);
 
         $failure = null;
 
         try {
-            $body($steps, $invariants, $context, $trail);
+            $body($trail);
         } catch (OrderNotViableException $notViable) {
             $failure = $notViable;
         } catch (Throwable $caught) {
-            $failure = JourneyFailedException::wrap($journey, $trail, $caught);
+            $failure = JourneyFailedException::wrap($description, $trail, $caught);
         }
 
-        foreach ($context->drainDeferred() as $teardown) {
+        // Every instance shares one stack, so draining any context unwinds
+        // the whole trail's teardowns in reverse execution order.
+        foreach ($instances[0]->context->drainDeferred() as $teardown) {
             try {
                 $teardown();
             } catch (Throwable $caught) {
                 // A teardown failure must never mask the primary failure.
-                $failure ??= JourneyFailedException::wrap($journey, $trail, $caught);
+                $failure ??= JourneyFailedException::wrap($description, $trail, $caught);
             }
         }
 
@@ -109,40 +151,38 @@ final class JourneyRunner
         return $trail;
     }
 
-    /**
-     * @param  list<Step>  $steps
-     * @param  list<Invariant>  $invariants
-     */
-    private function runCanonical(array $steps, array $invariants, Context $context, Trail $trail): void
+    /** @param non-empty-list<JourneyInstance> $instances */
+    private function runCanonical(array $instances, Trail $trail): void
     {
-        foreach ($steps as $step) {
-            if (! $step->isEnabled($context)) {
-                throw new InvalidJourneyException(sprintf(
-                    'Step "%s" is not enabled when reached in declared order; the canonical order must be a valid trail. Check its when()/after() constraints.',
-                    $step->name(),
-                ));
-            }
+        foreach ($instances as $instance) {
+            foreach ($instance->steps as $step) {
+                if (! $step->isEnabled($instance->context)) {
+                    throw new InvalidJourneyException(sprintf(
+                        'Step "%s" is not enabled when reached in declared order; the canonical order must be a valid trail. Check its when()/after() constraints.',
+                        $step->name(),
+                    ));
+                }
 
-            $this->executeStep($step, $invariants, $context, $trail);
+                $this->executeStep($instance, $step, $this->mergedInvariants($instances), $trail);
+            }
         }
     }
 
-    /**
-     * @param  list<Step>  $steps
-     * @param  list<Invariant>  $invariants
-     */
-    private function runShuffled(array $steps, array $invariants, Context $context, Trail $trail, int $repeatBias = 1): void
+    /** @param non-empty-list<JourneyInstance> $instances */
+    private function runShuffled(array $instances, Randomizer $randomizer, Trail $trail, int $repeatBias): void
     {
+        $invariants = $this->mergedInvariants($instances);
         $ticks = 0;
-        $maxTicks = max(100, count($steps) * self::TICK_MULTIPLIER);
+        $totalSteps = array_sum(array_map(fn (JourneyInstance $instance): int => count($instance->steps), $instances));
+        $maxTicks = max(100, $totalSteps * self::TICK_MULTIPLIER);
 
-        while (($pending = $this->pending($steps, $context)) !== []) {
-            $enabled = array_values(array_filter($steps, fn (Step $step): bool => $step->isEnabled($context)));
+        while (($pending = $this->pending($instances)) !== []) {
+            $enabled = $this->enabled($instances);
 
             if ($enabled === []) {
                 throw new InvalidJourneyException(sprintf(
                     'Deadlock: no step is enabled but these steps have not run: %s. A when()/after() constraint is unsatisfiable from here.',
-                    implode(', ', array_map(fn (Step $step): string => '"'.$step->name().'"', $pending)),
+                    implode(', ', $pending),
                 ));
             }
 
@@ -153,7 +193,9 @@ final class JourneyRunner
                 ));
             }
 
-            $this->executeStep($this->pick($enabled, $context, $repeatBias), $invariants, $context, $trail);
+            [$instance, $step] = $this->pick($enabled, $randomizer, $repeatBias);
+
+            $this->executeStep($instance, $step, $invariants, $trail);
         }
     }
 
@@ -162,22 +204,23 @@ final class JourneyRunner
      * this consumes the randomizer identically to a uniform pick, so plain
      * shuffle trails are stable across versions.
      *
-     * @param  non-empty-list<Step>  $enabled
+     * @param  non-empty-list<array{JourneyInstance, Step}>  $enabled
+     * @return array{JourneyInstance, Step}
      */
-    private function pick(array $enabled, Context $context, int $repeatBias): Step
+    private function pick(array $enabled, Randomizer $randomizer, int $repeatBias): array
     {
         $weights = array_map(
-            fn (Step $step): int => $step->pickWeight() * ($step->isRepeatable() ? $repeatBias : 1),
+            fn (array $pair): int => $pair[1]->pickWeight() * ($pair[1]->isRepeatable() ? $repeatBias : 1),
             $enabled,
         );
 
-        $roll = $context->randomInt(1, array_sum($weights));
+        $roll = $randomizer->getInt(1, array_sum($weights));
 
-        foreach ($enabled as $index => $step) {
+        foreach ($enabled as $index => $pair) {
             $roll -= $weights[$index];
 
             if ($roll <= 0) {
-                return $step;
+                return $pair;
             }
         }
 
@@ -185,32 +228,75 @@ final class JourneyRunner
     }
 
     /** @param list<Invariant> $invariants */
-    private function executeStep(Step $step, array $invariants, Context $context, Trail $trail): void
+    private function executeStep(JourneyInstance $instance, Step $step, array $invariants, Trail $trail): void
     {
-        $trail->record($step->name());
+        $trail->record($instance->label === null ? $step->name() : sprintf('%s: %s', $instance->label, $step->name()));
 
-        $step->execute($context);
+        $step->execute($instance->context);
 
         foreach ($invariants as $invariant) {
             try {
-                $invariant->check($context);
+                $invariant->check($instance->context);
             } catch (Throwable $caught) {
                 throw InvariantViolationException::make($invariant, $step, $caught);
             }
         }
 
-        $context->recordRun($step->name());
+        $instance->context->recordRun($step->name());
     }
 
     /**
-     * Steps that still have to run at least once for the trail to be complete.
+     * All instances' invariants, checked after every step of any instance —
+     * a cross-tenant invariant declared on one journey polices them all.
      *
-     * @param  list<Step>  $steps
-     * @return list<Step>
+     * @param  non-empty-list<JourneyInstance>  $instances
+     * @return list<Invariant>
      */
-    private function pending(array $steps, Context $context): array
+    private function mergedInvariants(array $instances): array
     {
-        return array_values(array_filter($steps, fn (Step $step): bool => $context->timesRan($step->name()) === 0));
+        return array_merge(...array_map(fn (JourneyInstance $instance): array => $instance->invariants, $instances));
+    }
+
+    /**
+     * Names of steps that still have to run at least once, labelled when
+     * interleaved, quoted for the deadlock message.
+     *
+     * @param  non-empty-list<JourneyInstance>  $instances
+     * @return list<string>
+     */
+    private function pending(array $instances): array
+    {
+        $pending = [];
+
+        foreach ($instances as $instance) {
+            foreach ($instance->steps as $step) {
+                if ($instance->context->timesRan($step->name()) === 0) {
+                    $name = $instance->label === null ? $step->name() : sprintf('%s: %s', $instance->label, $step->name());
+                    $pending[] = '"'.$name.'"';
+                }
+            }
+        }
+
+        return $pending;
+    }
+
+    /**
+     * @param  non-empty-list<JourneyInstance>  $instances
+     * @return list<array{JourneyInstance, Step}>
+     */
+    private function enabled(array $instances): array
+    {
+        $enabled = [];
+
+        foreach ($instances as $instance) {
+            foreach ($instance->steps as $step) {
+                if ($step->isEnabled($instance->context)) {
+                    $enabled[] = [$instance, $step];
+                }
+            }
+        }
+
+        return $enabled;
     }
 
     /** @return list<Step> */

@@ -25,8 +25,7 @@ final class Context
     /** @var array<string, int> */
     private array $runs = [];
 
-    /** @var list<Closure> */
-    private array $deferred = [];
+    private readonly DeferredStack $deferred;
 
     /** @var array<string, Actor> */
     private array $actors = [];
@@ -39,7 +38,10 @@ final class Context
     public function __construct(
         private readonly Randomizer $randomizer,
         private readonly ?HttpDriver $http = null,
-    ) {}
+        ?DeferredStack $deferred = null,
+    ) {
+        $this->deferred = $deferred ?? new DeferredStack;
+    }
 
     public function remember(string $key, mixed $value): mixed
     {
@@ -242,7 +244,7 @@ final class Context
     /** Register cleanup to run LIFO at the end of the trail, even on failure. */
     public function defer(Closure $fn): void
     {
-        $this->deferred[] = $fn;
+        $this->deferred->push($fn);
     }
 
     /** @internal */
@@ -258,9 +260,6 @@ final class Context
      */
     public function drainDeferred(): array
     {
-        $deferred = array_reverse($this->deferred);
-        $this->deferred = [];
-
-        return $deferred;
+        return $this->deferred->drain();
     }
 }

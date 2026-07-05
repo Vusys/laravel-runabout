@@ -22,6 +22,23 @@ trait RunsJourneys
     }
 
     /**
+     * Merge-shuffle several journey instances into each trail — different
+     * tenants, different actors, one world. The go-to mode for isolation
+     * bugs no single journey can expose. See docs/interleave-design.md.
+     *
+     * @param  class-string<Journey>|Journey  ...$journeys
+     */
+    protected function interleave(string|Journey ...$journeys): PendingJourney
+    {
+        $instances = array_values(array_map(
+            fn (string|Journey $journey): Journey => is_string($journey) ? new $journey : $journey,
+            $journeys,
+        ));
+
+        return new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver());
+    }
+
+    /**
      * Adapts this test case's HTTP methods (Laravel's MakesHttpRequests) so
      * actors inside steps can make authenticated requests through it.
      */

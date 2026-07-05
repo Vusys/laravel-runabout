@@ -24,12 +24,26 @@ final class PendingJourney
 
     private ?int $exhaustiveLimit = null;
 
-    /** @param Closure(Closure): void $wrapper Wraps each trail; the default (from RunsJourneys) rolls back a database transaction. */
+    /** @var non-empty-list<Journey> */
+    private readonly array $journeys;
+
+    /**
+     * @param  Journey|list<Journey>  $journey  One journey, or several to interleave into each trail.
+     * @param  Closure(Closure): void  $wrapper  Wraps each trail; the default (from RunsJourneys) rolls back a database transaction.
+     */
     public function __construct(
-        private readonly Journey $journey,
+        Journey|array $journey,
         private Closure $wrapper,
         private readonly ?HttpDriver $http = null,
-    ) {}
+    ) {
+        $journeys = is_array($journey) ? $journey : [$journey];
+
+        if ($journeys === []) {
+            throw new InvalidJourneyException('At least one journey is required.');
+        }
+
+        $this->journeys = $journeys;
+    }
 
     /** How many seeded shuffled trails to run after the canonical one. */
     public function shuffles(int $count): self
@@ -139,13 +153,18 @@ final class PendingJourney
     private function trail(JourneyRunner $runner, int $seed, bool $shuffle): void
     {
         ($this->wrapper)(function () use ($runner, $seed, $shuffle): void {
-            $runner->run($this->journey, $seed, $shuffle, $this->http, $this->repeatBias);
+            $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias);
         });
     }
 
     private function runExhaustive(JourneyRunner $runner, int $limit): void
     {
-        $count = count($this->journey->steps());
+        if (count($this->journeys) > 1) {
+            throw new InvalidJourneyException('Exhaustive mode is not available for interleaved journeys: the ordering space is the product of the instances\' orderings.');
+        }
+
+        $journey = $this->journeys[0];
+        $count = count($journey->steps());
 
         $orderings = 1;
         for ($i = 2; $i <= $count; $i++) {
@@ -156,7 +175,7 @@ final class PendingJourney
                     'Exhaustive mode would run more than %d orderings for the %d steps of %s. Shrink the journey or raise the limit: exhaustive(limit: ...).',
                     $limit,
                     $count,
-                    $this->journey::class,
+                    $journey::class,
                 ));
             }
         }
@@ -167,8 +186,8 @@ final class PendingJourney
             $seed = $this->deriveSeed($index++);
 
             try {
-                ($this->wrapper)(function () use ($runner, $order, $seed): void {
-                    $runner->runOrder($this->journey, $order, $seed, $this->http);
+                ($this->wrapper)(function () use ($runner, $journey, $order, $seed): void {
+                    $runner->runOrder($journey, $order, $seed, $this->http);
                 });
             } catch (OrderNotViableException) {
                 // Not every permutation satisfies the constraints; skip it.
@@ -211,7 +230,7 @@ final class PendingJourney
             return random_int(0, 2147483647);
         }
 
-        return crc32($this->journey::class.'#'.$index);
+        return crc32(implode('+', array_map(fn (Journey $journey): string => $journey::class, $this->journeys)).'#'.$index);
     }
 
     private function explore(): bool
