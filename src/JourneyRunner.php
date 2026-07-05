@@ -71,7 +71,7 @@ final class JourneyRunner
         $instances = $this->instances([$journey], $randomizer, $http);
         $instance = $instances[0];
 
-        return $this->trail($instances, $seed, 'exhaustive', function (Trail $trail) use ($instance, $order): void {
+        return $this->trail($instances, $seed, 'exhaustive', function (Trail $trail) use ($instances, $instance, $order): void {
             foreach ($order as $index) {
                 $step = $instance->steps[$index];
 
@@ -79,7 +79,7 @@ final class JourneyRunner
                     throw new OrderNotViableException($step->name());
                 }
 
-                $this->executeStep($instance, $step, $instance->invariants, $trail);
+                $this->executeStep($instance, $step, $instances, $trail);
             }
         });
     }
@@ -163,7 +163,7 @@ final class JourneyRunner
                     ));
                 }
 
-                $this->executeStep($instance, $step, $this->mergedInvariants($instances), $trail);
+                $this->executeStep($instance, $step, $instances, $trail);
             }
         }
     }
@@ -171,7 +171,6 @@ final class JourneyRunner
     /** @param non-empty-list<JourneyInstance> $instances */
     private function runShuffled(array $instances, Randomizer $randomizer, Trail $trail, int $repeatBias): void
     {
-        $invariants = $this->mergedInvariants($instances);
         $ticks = 0;
         $totalSteps = array_sum(array_map(fn (JourneyInstance $instance): int => count($instance->steps), $instances));
         $maxTicks = max(100, $totalSteps * self::TICK_MULTIPLIER);
@@ -195,7 +194,7 @@ final class JourneyRunner
 
             [$instance, $step] = $this->pick($enabled, $randomizer, $repeatBias);
 
-            $this->executeStep($instance, $step, $invariants, $trail);
+            $this->executeStep($instance, $step, $instances, $trail);
         }
     }
 
@@ -227,34 +226,61 @@ final class JourneyRunner
         return $enabled[count($enabled) - 1];
     }
 
-    /** @param list<Invariant> $invariants */
-    private function executeStep(JourneyInstance $instance, Step $step, array $invariants, Trail $trail): void
+    /**
+     * Execute one step of one instance, then check every instance's
+     * invariants — a cross-tenant invariant declared on one journey polices
+     * them all. The step runs inside the acting instance's aroundStep()
+     * wrapper; each invariant batch runs inside its own instance's wrapper,
+     * because invariants fire after other instances' steps too and cannot
+     * rely on the environment the last act left behind.
+     *
+     * @param  non-empty-list<JourneyInstance>  $instances
+     */
+    private function executeStep(JourneyInstance $instance, Step $step, array $instances, Trail $trail): void
     {
         $trail->record($instance->label === null ? $step->name() : sprintf('%s: %s', $instance->label, $step->name()));
 
-        $step->execute($instance->context);
+        $this->wrapped($instance, fn () => $step->execute($instance->context));
 
-        foreach ($invariants as $invariant) {
-            try {
-                $invariant->check($instance->context);
-            } catch (Throwable $caught) {
-                throw InvariantViolationException::make($invariant, $step, $caught);
+        foreach ($instances as $owner) {
+            if ($owner->invariants === []) {
+                continue;
             }
+
+            $this->wrapped($owner, function () use ($owner, $step): void {
+                foreach ($owner->invariants as $invariant) {
+                    try {
+                        $invariant->check($owner->context);
+                    } catch (Throwable $caught) {
+                        throw InvariantViolationException::make($invariant, $step, $caught);
+                    }
+                }
+            });
         }
 
         $instance->context->recordRun($step->name());
     }
 
     /**
-     * All instances' invariants, checked after every step of any instance —
-     * a cross-tenant invariant declared on one journey polices them all.
-     *
-     * @param  non-empty-list<JourneyInstance>  $instances
-     * @return list<Invariant>
+     * Run an execution inside the instance's aroundStep() hook, guarding
+     * against an override that forgets to invoke it — a silently skipped
+     * step would make the journey test less than it claims.
      */
-    private function mergedInvariants(array $instances): array
+    private function wrapped(JourneyInstance $instance, Closure $execution): void
     {
-        return array_merge(...array_map(fn (JourneyInstance $instance): array => $instance->invariants, $instances));
+        $ran = false;
+
+        $instance->journey->aroundStep(function () use (&$ran, $execution): void {
+            $ran = true;
+            $execution();
+        }, $instance->context);
+
+        if (! $ran) {
+            throw new InvalidJourneyException(sprintf(
+                '%s::aroundStep() returned without invoking the execution closure it was given.',
+                $instance->journey::class,
+            ));
+        }
     }
 
     /**

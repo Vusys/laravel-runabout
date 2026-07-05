@@ -24,6 +24,14 @@ So: each instance owns a `Context` (values, history, actors), and all contexts s
 
 After every step — whichever instance it belongs to — the runner checks the union of all instances' invariants. Invariants are world-facing (they query the database, not the context), so a tenant-isolation invariant declared on the journey class naturally polices both instances at once: two instances of the same journey contribute the same checks twice, which is redundant but harmless, and instances of different journeys compose their checks.
 
+## Per-instance environment: aroundStep()
+
+The per-instance/shared split above covers state the *package* owns. Real apps add a third kind: global state the app itself uses to answer "who is acting" — session-keyed tenancy being the canonical case. That state is one-per-world (shared), but its correct value is one-per-instance, and whose turn it is changes step to step, so it cannot be established once per trail.
+
+`Journey::aroundStep(Closure $execution, Context $context)` is the seam: the runner passes every execution belonging to an instance through its journey's override — each step (act + assertions) and each check of that journey's invariants. Invariants are deliberately included: they run after *other* instances' steps, so they would otherwise observe whatever environment the last act left behind. Teardowns are deliberately excluded: they run as one interleaved LIFO sequence at trail end, and a deferred closure that needs instance environment can establish it itself.
+
+Declaring the wrapper once on the journey (rather than calling a helper at the top of every act) is a correctness decision, not an ergonomic one. A forgotten per-act helper does not error — the act silently runs as whichever tenant acted last, producing self-consistent data under the wrong tenant that no invariant can flag; the journey quietly tests less than it claims. The hook cannot be forgotten per step, and the runner rejects an override that returns without invoking the execution closure — the other silent failure shape.
+
 ## Trails and failure output
 
 Steps are recorded with an instance label (`A: cast vote`, `B: draft post`); single-instance trails stay unlabelled. The failure message names each label's journey class, and the seed replays the merged trail exactly — same interleaving, same data choices.

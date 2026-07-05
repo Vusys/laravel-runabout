@@ -308,6 +308,29 @@ Invariant "Community.posts_count matches its source data" violated after step "d
 
 The package's fixture plants exactly this bug — a cached `posts_count` refreshed by a query that forgot its community scope. With one community the scoped and unscoped counts are provably identical, so *no* single-instance trail can ever detect it; the suite asserts that 40 single-instance shuffles stay green while interleaved trails catch it immediately. The full design rationale lives in [docs/interleave-design.md](docs/interleave-design.md).
 
+### Per-instance environment: `aroundStep()`
+
+Some apps carry "who is acting" in global state beyond the auth guard — session-keyed tenancy is the classic case. Interleaved instances share that state, and whose turn it is changes step to step, so it can't be established once per trail. Override `aroundStep()` on the journey and it wraps every execution belonging to that instance — each step *and* each check of that instance's invariants (which run after other instances' steps too):
+
+```php
+class TenantJourney extends Journey
+{
+    public function __construct(private readonly Tenant $tenant, private readonly User $user) {}
+
+    public function aroundStep(Closure $execution, Context $ctx): void
+    {
+        Auth::setUser($this->user);
+        session()->put('current-tenant-id', $this->tenant->id);
+
+        $execution();
+    }
+
+    // ...steps() and invariants() as usual, free of tenancy plumbing.
+}
+```
+
+Declaring it once on the journey closes a subtle hole: a per-act helper that someone forgets on one step doesn't error — the act silently runs as whichever tenant acted last, producing consistent-looking data under the wrong tenant that no invariant can flag. The hook can't be forgotten per step, and a wrapper that fails to call `$execution()` is rejected loudly.
+
 ## Database reset between trails
 
 Each trail runs against fresh state. The default wraps every trail in a transaction on the default connection and rolls it back. When the code under test commits or manages transactions itself, opt into truncation; for anything else (multiple connections, external stores), supply your own wrapper:
