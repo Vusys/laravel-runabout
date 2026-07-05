@@ -200,11 +200,25 @@ final class PendingJourney
 
     /**
      * Deterministic by default: derived from the journey class and the trail
-     * index, so CI is stable run to run. RUNABOUT_SEED overrides for replay.
+     * index, so CI is stable run to run. RUNABOUT_SEED overrides for replay,
+     * and RUNABOUT_RANDOMIZE=1 explores fresh seeds on every run — meant for
+     * a nightly job that hunts orderings the fixed seeds never visit. Every
+     * failure still prints its seed, so a nightly find replays exactly.
      */
     private function deriveSeed(int $index): int
     {
+        if ($this->explore()) {
+            return random_int(0, 2147483647);
+        }
+
         return crc32($this->journey::class.'#'.$index);
+    }
+
+    private function explore(): bool
+    {
+        $flag = getenv('RUNABOUT_RANDOMIZE');
+
+        return ! in_array($flag, [false, '', '0'], true);
     }
 
     private function seedFromEnvironment(): ?int

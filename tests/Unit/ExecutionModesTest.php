@@ -74,6 +74,44 @@ final class ExecutionModesTest extends TestCase
         $this->pending($journey)->exhaustive()->run();
     }
 
+    public function test_randomize_env_explores_fresh_seeds_each_run(): void
+    {
+        putenv('RUNABOUT_RANDOMIZE=1');
+
+        try {
+            $this->assertNotSame($this->trailLog(), $this->trailLog(), 'Two RUNABOUT_RANDOMIZE runs must explore different orderings.');
+        } finally {
+            putenv('RUNABOUT_RANDOMIZE');
+        }
+    }
+
+    public function test_runs_are_deterministic_without_the_randomize_env(): void
+    {
+        $this->assertSame($this->trailLog(), $this->trailLog());
+    }
+
+    /** @return list<string> The concatenated step order of canonical + 10 shuffles. */
+    private function trailLog(): array
+    {
+        /** @var ArrayObject<int, string> $log */
+        $log = new ArrayObject;
+
+        $append = fn (string $name): Closure => function () use ($log, $name): void {
+            $log[] = $name;
+        };
+
+        $journey = $this->journey([
+            Step::make('a')->act($append('a')),
+            Step::make('b')->act($append('b')),
+            Step::make('c')->act($append('c')),
+            Step::make('d')->act($append('d')),
+        ]);
+
+        $this->pending($journey)->shuffles(10)->run();
+
+        return array_values($log->getArrayCopy());
+    }
+
     /** Total executions of a repeatable step across seeds 1-15. */
     private function repeatableRuns(int $weight, int $repeatBias = 1): int
     {

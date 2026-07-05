@@ -50,11 +50,14 @@ final class Trail
         }
 
         $lines = [];
+        $runs = [];
         $last = count($this->steps) - 1;
 
         foreach ($this->steps as $index => $step) {
+            $runs[$step] = ($runs[$step] ?? 0) + 1;
             $marker = $index === $last ? '>' : ' ';
-            $lines[] = sprintf('%s %2d. %s', $marker, $index + 1, $step);
+            $label = $runs[$step] > 1 ? sprintf('%s (run %d)', $step, $runs[$step]) : $step;
+            $lines[] = sprintf('%s %2d. %s', $marker, $index + 1, $label);
         }
 
         return implode(PHP_EOL, $lines);
