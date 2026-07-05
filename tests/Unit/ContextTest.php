@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Tests\Unit;
 
 use Illuminate\Auth\GenericUser;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\TestCase;
 use Random\Engine\Mt19937;
@@ -153,6 +154,42 @@ final class ContextTest extends TestCase
         $this->assertSame([7], $authenticated);
         $this->assertSame($response, $sent);
         $this->assertSame($response, $ctx->lastResponse());
+    }
+
+    public function test_travel_to_freezes_the_clock_and_travel_back_restores_it(): void
+    {
+        $ctx = $this->context();
+
+        try {
+            $ctx->travelTo('2030-06-15 12:00:00');
+            $this->assertSame('2030-06-15 12:00:00', Date::now()->format('Y-m-d H:i:s'));
+
+            $ctx->travel('+2 days');
+            $this->assertSame('2030-06-17 12:00:00', Date::now()->format('Y-m-d H:i:s'));
+
+            $ctx->travelBack();
+            $this->assertFalse(Date::hasTestNow());
+        } finally {
+            Date::setTestNow();
+        }
+    }
+
+    public function test_time_travel_registers_a_single_deferred_unwind(): void
+    {
+        $ctx = $this->context();
+
+        try {
+            $ctx->travelTo('2030-06-15');
+            $ctx->travel('+1 hour');
+
+            $deferred = $ctx->drainDeferred();
+            $this->assertCount(1, $deferred);
+
+            $deferred[0]();
+            $this->assertFalse(Date::hasTestNow());
+        } finally {
+            Date::setTestNow();
+        }
     }
 
     private function context(): Context

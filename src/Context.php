@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Vusys\Runabout;
 
 use Closure;
+use DateTimeInterface;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Testing\TestResponse;
 use Random\Randomizer;
 use RuntimeException;
@@ -31,6 +33,8 @@ final class Context
 
     /** @var TestResponse<Response>|null */
     private ?TestResponse $lastResponse = null;
+
+    private bool $clockUnwindRegistered = false;
 
     public function __construct(
         private readonly Randomizer $randomizer,
@@ -198,6 +202,41 @@ final class Context
     public function rememberResponse(TestResponse $response): TestResponse
     {
         return $this->lastResponse = $response;
+    }
+
+    /**
+     * Freeze the clock at a moment. Unwound automatically at the end of the
+     * trail (even on failure), so no trail leaks frozen time into the next.
+     */
+    public function travelTo(DateTimeInterface|string $moment): void
+    {
+        $this->unwindClockAtTrailEnd();
+
+        Date::setTestNow(Date::parse($moment));
+    }
+
+    /** Move the clock relative to now: $ctx->travel('+1 day'). */
+    public function travel(string $modifier): void
+    {
+        $this->unwindClockAtTrailEnd();
+
+        Date::setTestNow(Date::now()->modify($modifier));
+    }
+
+    /** Return to the real clock immediately. */
+    public function travelBack(): void
+    {
+        Date::setTestNow();
+    }
+
+    private function unwindClockAtTrailEnd(): void
+    {
+        if ($this->clockUnwindRegistered) {
+            return;
+        }
+
+        $this->clockUnwindRegistered = true;
+        $this->defer(fn () => Date::setTestNow());
     }
 
     /** Register cleanup to run LIFO at the end of the trail, even on failure. */
