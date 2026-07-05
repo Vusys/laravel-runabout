@@ -6,12 +6,12 @@ namespace Vusys\Runabout;
 
 use Closure;
 
-final class Invariant
+final readonly class Invariant
 {
     /** @param Closure(Context): void $check */
     private function __construct(
-        private readonly string $name,
-        private readonly Closure $check,
+        private string $name,
+        private Closure $check,
     ) {}
 
     /** @param Closure(Context): void $check */

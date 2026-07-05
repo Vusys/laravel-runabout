@@ -20,12 +20,12 @@ final class PostLifecycleJourney extends Journey
 
         return [
             Step::make('create community')
-                ->act(fn (Context $ctx) => $ctx->remember('community', Community::query()->create(['name' => 'general'])))
+                ->act(fn (Context $ctx): mixed => $ctx->remember('community', Community::query()->create(['name' => 'general'])))
                 ->assert(fn (Context $ctx) => Assert::assertTrue($ctx->instance('community', Community::class)->exists)),
 
             Step::make('draft post')
                 ->after('create community')
-                ->act(fn (Context $ctx) => $ctx->remember('post', $ctx->instance('community', Community::class)->posts()->create(['title' => 'Hello world'])))
+                ->act(fn (Context $ctx): mixed => $ctx->remember('post', $ctx->instance('community', Community::class)->posts()->create(['title' => 'Hello world'])))
                 ->assert(fn (Context $ctx) => Assert::assertSame('draft', $ctx->instance('post', Post::class)->refresh()->status)),
 
             Step::make('publish post')
@@ -64,6 +64,7 @@ final class PostLifecycleJourney extends Journey
         ];
     }
 
+    #[\Override]
     public function invariants(): array
     {
         return [

@@ -18,7 +18,7 @@ final class JourneyRunner
      * never finishes: total executions per trail are capped at this multiple
      * of the step count (with a generous floor for tiny journeys).
      */
-    private const TICK_MULTIPLIER = 25;
+    private const int TICK_MULTIPLIER = 25;
 
     /** @throws JourneyFailedException */
     public function run(Journey $journey, int $seed, bool $shuffle = true): Trail
@@ -46,7 +46,7 @@ final class JourneyRunner
             }
         }
 
-        if ($failure !== null) {
+        if ($failure instanceof JourneyFailedException) {
             throw $failure;
         }
 
