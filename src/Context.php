@@ -6,6 +6,7 @@ namespace Vusys\Runabout;
 
 use Closure;
 use Random\Randomizer;
+use RuntimeException;
 
 /**
  * The mutable bag threaded through a single trail: remembered values, run
@@ -34,6 +35,31 @@ final class Context
     public function get(string $key, mixed $default = null): mixed
     {
         return $this->values[$key] ?? $default;
+    }
+
+    /**
+     * A typed get(): returns the remembered value, guaranteeing its class so
+     * call sites (and static analysis) don't have to deal with mixed.
+     *
+     * @template T of object
+     *
+     * @param  class-string<T>  $class
+     * @return T
+     */
+    public function instance(string $key, string $class): object
+    {
+        $value = $this->get($key);
+
+        if (! $value instanceof $class) {
+            throw new RuntimeException(sprintf(
+                'Context key "%s" holds %s, expected %s.',
+                $key,
+                get_debug_type($value),
+                $class,
+            ));
+        }
+
+        return $value;
     }
 
     public function has(string $key): bool

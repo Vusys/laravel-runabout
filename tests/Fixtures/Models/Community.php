@@ -7,6 +7,10 @@ namespace Vusys\Runabout\Tests\Fixtures\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $name
+ */
 final class Community extends Model
 {
     protected $guarded = [];

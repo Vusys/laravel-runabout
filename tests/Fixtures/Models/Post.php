@@ -8,6 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $community_id
+ * @property string $title
+ * @property string $status
+ * @property int $score
+ */
 final class Post extends Model
 {
     protected $guarded = [];

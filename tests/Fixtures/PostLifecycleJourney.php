@@ -21,23 +21,23 @@ final class PostLifecycleJourney extends Journey
         return [
             Step::make('create community')
                 ->act(fn (Context $ctx) => $ctx->remember('community', Community::query()->create(['name' => 'general'])))
-                ->assert(fn (Context $ctx) => Assert::assertTrue($ctx->get('community')->exists)),
+                ->assert(fn (Context $ctx) => Assert::assertTrue($ctx->instance('community', Community::class)->exists)),
 
             Step::make('draft post')
                 ->after('create community')
-                ->act(fn (Context $ctx) => $ctx->remember('post', $ctx->get('community')->posts()->create(['title' => 'Hello world'])))
-                ->assert(fn (Context $ctx) => Assert::assertSame('draft', $ctx->get('post')->refresh()->status)),
+                ->act(fn (Context $ctx) => $ctx->remember('post', $ctx->instance('community', Community::class)->posts()->create(['title' => 'Hello world'])))
+                ->assert(fn (Context $ctx) => Assert::assertSame('draft', $ctx->instance('post', Post::class)->refresh()->status)),
 
             Step::make('publish post')
                 ->after('draft post')
-                ->act(fn (Context $ctx) => $service->publish($ctx->get('post')))
-                ->assert(fn (Context $ctx) => Assert::assertSame('published', $ctx->get('post')->refresh()->status)),
+                ->act(fn (Context $ctx) => $service->publish($ctx->instance('post', Post::class)))
+                ->assert(fn (Context $ctx) => Assert::assertSame('published', $ctx->instance('post', Post::class)->refresh()->status)),
 
             Step::make('cast vote')
                 ->after('publish post')
                 ->repeatable()
                 ->act(function (Context $ctx) use ($service): void {
-                    $post = $ctx->get('post')->refresh();
+                    $post = $ctx->instance('post', Post::class)->refresh();
 
                     try {
                         $service->vote($post, $ctx->pick(['ana', 'ben', 'cai']), $ctx->pick([1, -1]));
@@ -47,7 +47,7 @@ final class PostLifecycleJourney extends Journey
                     }
                 })
                 ->assert(function (Context $ctx): void {
-                    $post = $ctx->get('post')->refresh();
+                    $post = $ctx->instance('post', Post::class)->refresh();
 
                     if ($post->status === 'locked') {
                         Assert::assertTrue($ctx->get('last vote rejected'), 'Voting on a locked post must be rejected.');
@@ -59,8 +59,8 @@ final class PostLifecycleJourney extends Journey
 
             Step::make('lock post')
                 ->after('publish post')
-                ->act(fn (Context $ctx) => $service->lock($ctx->get('post')))
-                ->assert(fn (Context $ctx) => Assert::assertSame('locked', $ctx->get('post')->refresh()->status)),
+                ->act(fn (Context $ctx) => $service->lock($ctx->instance('post', Post::class)))
+                ->assert(fn (Context $ctx) => Assert::assertSame('locked', $ctx->instance('post', Post::class)->refresh()->status)),
         ];
     }
 

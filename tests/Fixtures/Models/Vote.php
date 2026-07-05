@@ -7,6 +7,12 @@ namespace Vusys\Runabout\Tests\Fixtures\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $post_id
+ * @property string $voter
+ * @property int $value
+ */
 final class Vote extends Model
 {
     protected $guarded = [];

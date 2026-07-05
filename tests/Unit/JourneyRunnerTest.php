@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout\Tests\Unit;
 
+use ArrayObject;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\TestCase;
 use Vusys\Runabout\Context;
@@ -163,25 +164,27 @@ final class JourneyRunnerTest extends TestCase
 
     public function test_a_repeatable_step_can_tell_whether_it_ran_before(): void
     {
-        $observed = [];
+        /** @var ArrayObject<int, bool> $observed */
+        $observed = new ArrayObject;
 
         $journey = $this->journey([
             Step::make('slow burner'),
             Step::make('again and again')
                 ->repeatable()
-                ->assert(function (Context $ctx) use (&$observed): void {
+                ->assert(function (Context $ctx) use ($observed): void {
                     $observed[] = $ctx->ranBefore('again and again');
                 }),
         ]);
 
         // Find a seed whose trail repeats the repeatable step; seeds are deterministic, so this is stable.
         for ($seed = 1; $seed <= 50; $seed++) {
-            $observed = [];
+            $observed->exchangeArray([]);
             $trail = (new JourneyRunner)->run($journey, $seed);
+            $runs = array_values($observed->getArrayCopy());
 
-            if (count($trail->steps()) > 2) {
-                $this->assertFalse($observed[0], 'First execution must see ranBefore() === false.');
-                $this->assertTrue(end($observed), 'Repeat executions must see ranBefore() === true.');
+            if ($runs !== [] && count($trail->steps()) > 2) {
+                $this->assertFalse($runs[0], 'First execution must see ranBefore() === false.');
+                $this->assertTrue(end($runs), 'Repeat executions must see ranBefore() === true.');
 
                 return;
             }
