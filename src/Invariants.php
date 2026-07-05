@@ -93,33 +93,41 @@ final class Invariants
      * moment a row jumps between states no edge connects — the safety net
      * for state machines enforced by scattered if-guards.
      *
+     * States are read from $column and must resolve to a string. A native
+     * BackedEnum is coerced to its ->value automatically; for a cast value
+     * object (e.g. a spatie ModelState) pass $stateOf to map a row to its
+     * state string — that keeps this helper free of any state-cast dependency.
+     *
      * @template TModel of Model
      *
      * @param  class-string<TModel>  $model
      * @param  array<string, list<string>>  $transitions  Allowed edges: from-state => list of to-states.
      * @param  list<string>|null  $initial  States a row may first be observed in (null: any).
+     * @param  (Closure(TModel): (string|\BackedEnum))|null  $stateOf  Maps a row to its state; defaults to reading $column.
      */
-    public static function legalTransitions(string $model, string $column, array $transitions, ?array $initial = null): Invariant
+    public static function legalTransitions(string $model, string $column, array $transitions, ?array $initial = null, ?Closure $stateOf = null): Invariant
     {
         /** @var array<string, string> $seen */
         $seen = [];
 
         return Invariant::make(
             sprintf('%s.%s only makes legal transitions', class_basename($model), $column),
-            function () use ($model, $column, $transitions, $initial, &$seen): void {
+            function () use ($model, $column, $transitions, $initial, $stateOf, &$seen): void {
                 foreach (self::typed($model, (new $model)->newQuery()->get()) as $row) {
                     $key = self::key($row);
-                    $state = $row->getAttribute($column);
+                    $raw = $stateOf instanceof Closure ? $stateOf($row) : $row->getAttribute($column);
 
-                    if (! is_string($state)) {
-                        throw new RuntimeException(sprintf(
-                            '%s %s\'s %s holds %s; a state column must hold strings.',
+                    $state = match (true) {
+                        is_string($raw) => $raw,
+                        $raw instanceof \BackedEnum => (string) $raw->value,
+                        default => throw new RuntimeException(sprintf(
+                            '%s %s\'s %s holds %s; a state column must hold strings or a BackedEnum, or pass a stateOf closure to map it.',
                             class_basename($model),
                             $key,
                             $column,
-                            get_debug_type($state),
-                        ));
-                    }
+                            get_debug_type($raw),
+                        )),
+                    };
 
                     if (! isset($seen[$key])) {
                         if ($initial !== null && ! in_array($state, $initial, true)) {
