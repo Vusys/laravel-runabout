@@ -18,30 +18,34 @@ final class PostLifecycleJourneyTest extends TestCase
     {
         parent::setUp();
 
-        PostService::$buggyRevote = false;
-        PostService::$buggyStaleBucket = false;
+        PostService::reset();
     }
 
     protected function tearDown(): void
     {
-        PostService::$buggyRevote = false;
-        PostService::$buggyStaleBucket = false;
+        PostService::reset();
 
         parent::tearDown();
     }
 
     public function test_the_journey_passes_when_the_app_is_correct(): void
     {
-        $this->journey(PostLifecycleJourney::class)->shuffles(25)->run();
+        $this->journey(PostLifecycleJourney::class)->shuffles(50)->run();
 
         $this->addToAssertionCount(1);
     }
 
-    public function test_the_canonical_order_misses_the_planted_revote_bug(): void
+    public function test_the_canonical_order_misses_every_planted_bug(): void
     {
         PostService::$buggyRevote = true;
+        PostService::$buggyStaleBucket = true;
+        PostService::$buggyArchiveGuard = true;
+        PostService::$buggyVoteOnRemoved = true;
+        PostService::$buggyReportQuota = true;
 
-        // The declared order casts a single vote, so the score never drifts.
+        // The declared order votes once, reports once, crosses the day
+        // boundary before voting, archives from locked, and removes last —
+        // every planted bug needs an ordering the canonical trail never takes.
         $this->journey(PostLifecycleJourney::class)->shuffles(0)->run();
 
         $this->addToAssertionCount(1);
@@ -51,42 +55,37 @@ final class PostLifecycleJourneyTest extends TestCase
     {
         PostService::$buggyRevote = true;
 
-        try {
-            $this->journey(PostLifecycleJourney::class)->shuffles(25)->run();
-            $this->fail('Expected a shuffled trail to catch the revote bug.');
-        } catch (JourneyFailedException $e) {
-            $this->assertStringContainsString('post score equals sum of votes', $e->getMessage());
-            $this->assertStringContainsString('cast vote', $e->getMessage());
-            $this->assertStringContainsString('RUNABOUT_SEED=', $e->getMessage());
-        }
-    }
-
-    public function test_the_canonical_order_misses_the_planted_stale_bucket_bug(): void
-    {
-        PostService::$buggyStaleBucket = true;
-
-        // The declared order crosses the day boundary before any vote is cast,
-        // so the bucket never carries a stale count.
-        $this->journey(PostLifecycleJourney::class)->shuffles(0)->run();
-
-        $this->addToAssertionCount(1);
+        $this->assertShufflingCatches('Post.score matches its source data', shuffles: 60);
     }
 
     public function test_shuffling_finds_the_planted_stale_bucket_bug(): void
     {
         PostService::$buggyStaleBucket = true;
 
-        try {
-            // Only a vote → new day → vote trail triggers this bug, and under a
-            // uniform picker that shape shows up in roughly 1 in 12 trails (the
-            // first catching derived seed is trail #40). That rarity is exactly
-            // what the repeat-heavy execution mode exists to fix.
-            $this->journey(PostLifecycleJourney::class)->shuffles(50)->run();
-            $this->fail('Expected a vote-day-vote shuffle to catch the stale bucket bug.');
-        } catch (JourneyFailedException $e) {
-            $this->assertStringContainsString('daily vote bucket matches votes cast today', $e->getMessage());
-            $this->assertStringContainsString('RUNABOUT_SEED=', $e->getMessage());
-        }
+        // Only a vote → new day → vote trail triggers this bug — rare under a
+        // uniform picker. That rarity is what repeat-heavy mode exists to fix.
+        $this->assertShufflingCatches('daily vote bucket matches votes cast today', shuffles: 60);
+    }
+
+    public function test_shuffling_finds_the_planted_archive_guard_bug(): void
+    {
+        PostService::$buggyArchiveGuard = true;
+
+        $this->assertShufflingCatches('Post.status only makes legal transitions', shuffles: 10);
+    }
+
+    public function test_shuffling_finds_the_planted_vote_on_removed_bug(): void
+    {
+        PostService::$buggyVoteOnRemoved = true;
+
+        $this->assertShufflingCatches('trashed Post rows keep no live votes or reports', shuffles: 10);
+    }
+
+    public function test_shuffling_finds_the_planted_report_quota_bug(): void
+    {
+        PostService::$buggyReportQuota = true;
+
+        $this->assertShufflingCatches('Post.reports_remaining balances against its quota', shuffles: 30);
     }
 
     public function test_replaying_the_failing_seed_reproduces_the_failure(): void
@@ -94,7 +93,7 @@ final class PostLifecycleJourneyTest extends TestCase
         PostService::$buggyRevote = true;
 
         try {
-            $this->journey(PostLifecycleJourney::class)->shuffles(25)->run();
+            $this->journey(PostLifecycleJourney::class)->shuffles(60)->run();
             $this->fail('Expected a shuffled trail to catch the revote bug.');
         } catch (JourneyFailedException $first) {
             $seed = $first->trail()->seed();
@@ -105,6 +104,17 @@ final class PostLifecycleJourneyTest extends TestCase
             } catch (JourneyFailedException $replayed) {
                 $this->assertSame($first->trail()->steps(), $replayed->trail()->steps());
             }
+        }
+    }
+
+    private function assertShufflingCatches(string $invariant, int $shuffles): void
+    {
+        try {
+            $this->journey(PostLifecycleJourney::class)->shuffles($shuffles)->run();
+            $this->fail(sprintf('Expected a shuffled trail to violate "%s".', $invariant));
+        } catch (JourneyFailedException $e) {
+            $this->assertStringContainsString($invariant, $e->getMessage());
+            $this->assertStringContainsString('RUNABOUT_SEED=', $e->getMessage());
         }
     }
 }

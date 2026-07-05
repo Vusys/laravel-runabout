@@ -7,7 +7,7 @@ namespace Vusys\Runabout\Tests\Fixtures;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Assert;
 use Vusys\Runabout\Context;
-use Vusys\Runabout\Invariant;
+use Vusys\Runabout\Invariants;
 use Vusys\Runabout\Journey;
 use Vusys\Runabout\Step;
 use Vusys\Runabout\Tests\Fixtures\Models\Post;
@@ -93,15 +93,7 @@ final class HttpPostLifecycleJourney extends Journey
     public function invariants(): array
     {
         return [
-            Invariant::make('post score equals sum of votes', function (): void {
-                foreach (Post::query()->get() as $post) {
-                    Assert::assertSame(
-                        (int) $post->votes()->sum('value'),
-                        $post->score,
-                        sprintf('Cached score of post %d drifted from its votes.', $post->id),
-                    );
-                }
-            }),
+            Invariants::cachedColumnMatches(Post::class, 'score', fn (Post $post): int => (int) $post->votes()->sum('value')),
         ];
     }
 

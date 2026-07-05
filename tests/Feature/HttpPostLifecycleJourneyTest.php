@@ -19,14 +19,12 @@ final class HttpPostLifecycleJourneyTest extends TestCase
     {
         parent::setUp();
 
-        PostService::$buggyRevote = false;
-        PostService::$buggyStaleBucket = false;
+        PostService::reset();
     }
 
     protected function tearDown(): void
     {
-        PostService::$buggyRevote = false;
-        PostService::$buggyStaleBucket = false;
+        PostService::reset();
 
         parent::tearDown();
     }
@@ -71,7 +69,7 @@ final class HttpPostLifecycleJourneyTest extends TestCase
             $this->journey(HttpPostLifecycleJourney::class)->shuffles(25)->run();
             $this->fail('Expected a shuffled trail to catch the revote bug over HTTP.');
         } catch (JourneyFailedException $e) {
-            $this->assertStringContainsString('post score equals sum of votes', $e->getMessage());
+            $this->assertStringContainsString('Post.score matches its source data', $e->getMessage());
             $this->assertStringContainsString('cast vote', $e->getMessage());
             $this->assertStringContainsString('RUNABOUT_SEED=', $e->getMessage());
         }

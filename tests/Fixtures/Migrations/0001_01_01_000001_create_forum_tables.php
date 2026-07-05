@@ -24,6 +24,15 @@ return new class extends Migration
             $table->integer('score')->default(0);
             $table->integer('votes_today')->default(0);
             $table->date('votes_today_date')->nullable();
+            $table->integer('reports_remaining')->default(2);
+            $table->softDeletes();
+            $table->timestamps();
+        });
+
+        Schema::create('reports', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('post_id')->constrained();
+            $table->string('reporter');
             $table->timestamps();
         });
 
@@ -39,6 +48,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::dropIfExists('reports');
         Schema::dropIfExists('votes');
         Schema::dropIfExists('posts');
         Schema::dropIfExists('communities');
