@@ -10,6 +10,12 @@ final class Trail
     /** @var list<TrailToken> */
     private array $tokens = [];
 
+    /** @var array<int, list<Draw>> Recorded draws, keyed by token index. */
+    private array $draws = [];
+
+    /** @var array<int, bool> Whether each token's execution touched the raw randomizer, keyed by token index. */
+    private array $opaque = [];
+
     /** @param 'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'|'replayed' $mode */
     public function __construct(
         private readonly int $seed,
@@ -20,6 +26,36 @@ final class Trail
     public function record(?string $label, string $step, int $run): void
     {
         $this->tokens[] = new TrailToken($label, $step, $run);
+        $this->draws[] = [];
+        $this->opaque[] = false;
+    }
+
+    /**
+     * Attach the draws (and value-opacity) an execution made to its token —
+     * called after the execution so the value shrinker has its baseline.
+     *
+     * @param  list<Draw>  $draws
+     */
+    public function attachDraws(array $draws, bool $opaque): void
+    {
+        $last = count($this->tokens) - 1;
+
+        if ($last >= 0) {
+            $this->draws[$last] = $draws;
+            $this->opaque[$last] = $opaque;
+        }
+    }
+
+    /** @return list<Draw> The draws recorded for the token at $index. */
+    public function drawsAt(int $index): array
+    {
+        return $this->draws[$index] ?? [];
+    }
+
+    /** Whether the token at $index touched the raw randomizer (so value shrinking must skip it). */
+    public function isOpaqueAt(int $index): bool
+    {
+        return $this->opaque[$index] ?? false;
     }
 
     public function seed(): int

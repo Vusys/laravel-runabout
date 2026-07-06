@@ -196,7 +196,7 @@ final class JourneyRunner
         // too, are position-independent. Every instance shares one stack, so
         // draining any context unwinds the whole trail's teardowns in reverse.
         foreach ($instances as $instance) {
-            $instance->context->useStream($this->teardownStream($seed, $instance->label));
+            $instance->context->useSource(new StreamDrawSource($this->teardownStream($seed, $instance->label)));
         }
 
         foreach ($instances[0]->context->drainDeferred() as $teardown) {
@@ -305,39 +305,46 @@ final class JourneyRunner
      *
      * @param  non-empty-list<JourneyInstance>  $instances
      * @param  int  $runIndex  The 1-based run index that keys this execution's data stream.
+     * @param  list<int>|null  $forcedDraws  Values to force for this execution (value shrinking); null draws from the stream.
      */
-    private function executeStep(JourneyInstance $instance, Step $step, array $instances, Trail $trail, int $seed, int $runIndex): void
+    private function executeStep(JourneyInstance $instance, Step $step, array $instances, Trail $trail, int $seed, int $runIndex, ?array $forcedDraws = null): void
     {
-        $stream = $this->executionStream($seed, $instance->label, $step->name(), $runIndex);
+        $source = $this->executionSource($seed, $instance->label, $step->name(), $runIndex, $forcedDraws);
 
         $trail->record($instance->label, $step->name(), $runIndex);
+        $instance->context->useSource($source);
 
-        $instance->context->useStream($stream);
-        $this->wrapped($instance, fn () => $step->execute($instance->context));
+        try {
+            $this->wrapped($instance, fn () => $step->execute($instance->context));
 
-        foreach ($instances as $owner) {
-            if ($owner->invariants === []) {
-                continue;
-            }
-
-            // Invariants draw from the acting execution's stream, whichever
-            // instance owns them, so a stateful invariant's randomness is
-            // position-independent too.
-            $owner->context->useStream($stream);
-
-            $this->wrapped($owner, function () use ($owner, $instance, $step): void {
-                foreach ($owner->invariants as $invariant) {
-                    try {
-                        $invariant->check($owner->context);
-                    } catch (Throwable $caught) {
-                        throw InvariantViolationException::make(
-                            $owner->labelled($invariant->name()),
-                            $instance->labelled($step->name()),
-                            $caught,
-                        );
-                    }
+            foreach ($instances as $owner) {
+                if ($owner->invariants === []) {
+                    continue;
                 }
-            });
+
+                // Invariants draw from the acting execution's source, whichever
+                // instance owns them, so a stateful invariant's randomness is
+                // position-independent too.
+                $owner->context->useSource($source);
+
+                $this->wrapped($owner, function () use ($owner, $instance, $step): void {
+                    foreach ($owner->invariants as $invariant) {
+                        try {
+                            $invariant->check($owner->context);
+                        } catch (Throwable $caught) {
+                            throw InvariantViolationException::make(
+                                $owner->labelled($invariant->name()),
+                                $instance->labelled($step->name()),
+                                $caught,
+                            );
+                        }
+                    }
+                });
+            }
+        } finally {
+            // Record what was drawn (even if the step or an invariant threw) so
+            // the value shrinker has this execution's baseline.
+            $trail->attachDraws($source->draws(), $source->isOpaque());
         }
 
         $instance->context->recordRun($step->name());
@@ -365,7 +372,7 @@ final class JourneyRunner
                 continue;
             }
 
-            $owner->context->useStream($this->baselineStream($seed, $owner->label));
+            $owner->context->useSource(new StreamDrawSource($this->baselineStream($seed, $owner->label)));
 
             $this->wrapped($owner, function () use ($owner, $baseline): void {
                 foreach ($baseline as $invariant) {
@@ -474,6 +481,21 @@ final class JourneyRunner
     private function executionStream(int $seed, ?string $label, string $step, int $run): Randomizer
     {
         return new Randomizer(new Mt19937(crc32(sprintf('%d|%s|%s|%d', $seed, $label ?? '', $step, $run))));
+    }
+
+    /**
+     * The draw source for an execution: a recording stream source normally, or
+     * a scripted source (forced values, stream fallback) during value shrinking.
+     *
+     * @param  list<int>|null  $forcedDraws
+     */
+    private function executionSource(int $seed, ?string $label, string $step, int $run, ?array $forcedDraws): DrawSource
+    {
+        $stream = $this->executionStream($seed, $label, $step, $run);
+
+        return $forcedDraws === null
+            ? new StreamDrawSource($stream)
+            : new ScriptedDrawSource($forcedDraws, $stream);
     }
 
     /** The trail-end stream that teardowns draw from. */

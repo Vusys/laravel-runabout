@@ -35,26 +35,30 @@ final class Context
 
     private bool $clockUnwindRegistered = false;
 
+    private DrawSource $source;
+
     public function __construct(
-        private Randomizer $randomizer,
+        Randomizer|DrawSource $source,
         private readonly ?HttpDriver $http = null,
         ?DeferredStack $deferred = null,
     ) {
+        $this->source = $source instanceof DrawSource ? $source : new StreamDrawSource($source);
         $this->deferred = $deferred ?? new DeferredStack;
     }
 
     /**
-     * @internal Install the randomness stream for the execution about to run.
+     * @internal Install the draw source for the execution about to run.
      *
-     * Under seed schema v2 the runner swaps in a fresh per-execution stream
+     * Under seed schema v2 the runner swaps in a fresh per-execution source
      * before every step (and its invariant checks), so randomInt()/pick()/
      * randomizer() draw values that depend only on which execution it is —
      * never on what ran before it. That position-independence is what lets a
-     * shrunk or reordered trail reproduce a failure verbatim.
+     * shrunk or reordered trail reproduce a failure verbatim. The value
+     * shrinker swaps in a ScriptedDrawSource to force specific values.
      */
-    public function useStream(Randomizer $randomizer): void
+    public function useSource(DrawSource $source): void
     {
-        $this->randomizer = $randomizer;
+        $this->source = $source;
     }
 
     public function remember(string $key, mixed $value): mixed
@@ -166,11 +170,12 @@ final class Context
 
     /**
      * All randomness inside steps must come from these methods (or the
-     * Randomizer itself) so that a seed reproduces the trail exactly.
+     * Randomizer itself) so that a seed reproduces the trail exactly. Draws made
+     * here are recorded and are candidates for value shrinking.
      */
     public function randomInt(int $min, int $max): int
     {
-        return $this->randomizer->getInt($min, $max);
+        return $this->source->int($min, $max);
     }
 
     /**
@@ -181,12 +186,17 @@ final class Context
      */
     public function pick(array $options): mixed
     {
-        return $options[$this->randomizer->getInt(0, count($options) - 1)];
+        return $options[$this->source->int(0, count($options) - 1)];
     }
 
+    /**
+     * The raw randomizer escape hatch. Taking it marks the execution
+     * value-opaque: its draws still replay verbatim, but the value shrinker
+     * leaves them alone (it cannot see what was drawn through the raw handle).
+     */
     public function randomizer(): Randomizer
     {
-        return $this->randomizer;
+        return $this->source->randomizer();
     }
 
     public function timesRan(string $step): int
