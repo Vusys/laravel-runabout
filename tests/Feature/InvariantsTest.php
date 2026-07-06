@@ -101,6 +101,55 @@ final class InvariantsTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
+    public function test_quota_balances_still_accepts_a_constant_allowance(): void
+    {
+        $this->draftPost(); // reports_remaining defaults to 2, no reports spent
+
+        Invariants::quotaBalances(Post::class, 'reports_remaining', 2, fn (Post $post): int => $post->reports()->count())
+            ->check($this->context());
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_quota_balances_accepts_a_per_row_starting_allowance(): void
+    {
+        $community = Community::query()->create(['name' => 'general']);
+
+        // Two posts with different allowances (5 and 10) and different spend.
+        $small = $community->posts()->create(['title' => 'small', 'reports_remaining' => 3]);
+        $large = $community->posts()->create(['title' => 'large', 'reports_remaining' => 9]);
+        $small->reports()->createMany([['reporter' => 'a'], ['reporter' => 'b']]); // spent 2 -> 5 - 2 = 3
+        $large->reports()->create(['reporter' => 'c']);                            // spent 1 -> 10 - 1 = 9
+
+        Invariants::quotaBalances(
+            Post::class,
+            'reports_remaining',
+            fn (Post $post): int => $post->title === 'small' ? 5 : 10,
+            fn (Post $post): int => $post->reports()->count(),
+        )->check($this->context());
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_quota_balances_reports_the_per_row_allowance_on_drift(): void
+    {
+        $post = $this->draftPost();
+        $post->update(['reports_remaining' => 3]);
+        $post->reports()->create(['reporter' => 'a']); // allowance 5 - spent 1 = 4, but column holds 3
+
+        $invariant = Invariants::quotaBalances(
+            Post::class,
+            'reports_remaining',
+            fn (Post $post): int => 5,
+            fn (Post $post): int => $post->reports()->count(),
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('a starting quota of 5 minus actual spend leaves 4');
+
+        $invariant->check($this->context());
+    }
+
     private function draftPost(): Post
     {
         return Community::query()->create(['name' => 'general'])

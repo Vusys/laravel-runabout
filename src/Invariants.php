@@ -57,19 +57,25 @@ final class Invariants
      * A quota column must always equal the starting allowance minus what has
      * actually been spent — catches double-charging and missed refunds.
      *
+     * The starting allowance may be a constant shared by every row, or a
+     * closure computing it per row — real quotas differ by plan, tier, or
+     * tenant, so a single constant rarely fits.
+     *
      * @template TModel of Model
      *
      * @param  class-string<TModel>  $model
+     * @param  int|Closure(TModel): int  $starting  The allowance before any spend: a constant, or computed per row.
      * @param  Closure(TModel): int  $spent  Count what has actually been consumed.
      */
-    public static function quotaBalances(string $model, string $column, int $starting, Closure $spent): Invariant
+    public static function quotaBalances(string $model, string $column, int|Closure $starting, Closure $spent): Invariant
     {
         return Invariant::make(
             sprintf('%s.%s balances against its quota', class_basename($model), $column),
             function () use ($model, $column, $starting, $spent): void {
                 foreach (self::typed($model, (new $model)->newQuery()->get()) as $row) {
                     $remaining = $row->getAttribute($column);
-                    $expected = $starting - $spent($row);
+                    $allowance = $starting instanceof Closure ? $starting($row) : $starting;
+                    $expected = $allowance - $spent($row);
 
                     if ($expected != $remaining) {
                         throw new RuntimeException(sprintf(
@@ -78,7 +84,7 @@ final class Invariants
                             self::key($row),
                             $column,
                             var_export($remaining, true),
-                            $starting,
+                            $allowance,
                             $expected,
                         ));
                     }
