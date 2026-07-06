@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- `Invariants::legalTransitions()`: the "not a legal initial state" error now points at the fix for the common cause — a row that exists before the journey and is transitioned by the first step, so the invariant never observes its true initial state. Record it in a leading step.
+
 ### Added
 
 - `Invariants::quotaBalances()` accepts a per-row starting allowance: `$starting` may now be a `Closure(TModel): int` as well as an `int`, so quotas that differ by plan, tier, or tenant (the common case) can be expressed without a constant. The existing `int` form is unchanged.

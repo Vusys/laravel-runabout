@@ -138,7 +138,7 @@ final class Invariants
                     if (! isset($seen[$key])) {
                         if ($initial !== null && ! in_array($state, $initial, true)) {
                             throw new RuntimeException(sprintf(
-                                '%s %s appeared in state "%s", which is not a legal initial state (%s).',
+                                '%s %s appeared in state "%s", which is not a legal initial state (%s). If the row exists before the journey, observe it in a leading step so its initial state is recorded before any step transitions it.',
                                 class_basename($model),
                                 $key,
                                 $state,
