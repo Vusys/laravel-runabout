@@ -1,5 +1,5 @@
 {
-    "name": "vusys/runabout",
+    "name": "vusys/laravel-runabout",
     "description": "Journey testing for Laravel: run the steps of a user journey in seeded, shuffled orders and assert invariants along the way.",
     "license": "MIT",
     "type": "library",

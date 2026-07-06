@@ -35,7 +35,7 @@ You define a **Journey** as a set of **Steps**. Each step has an action, asserti
 ## Quick start
 
 ```
-composer require --dev vusys/runabout
+composer require --dev vusys/laravel-runabout
 ```
 
 Define a journey (this and every example below is lifted from the package's own test suite — a small fictional forum):
