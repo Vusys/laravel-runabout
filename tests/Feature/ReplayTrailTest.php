@@ -113,7 +113,7 @@ final class ReplayTrailTest extends TestCase
      * Run shuffles until the revote bug bites, and return the failing trail's
      * artifact plus its labelled step list.
      *
-     * @return array{0: array{seed: int, steps: list<array{0: string|null, 1: string, 2: int}>}, 1: list<string>}
+     * @return array{0: array{seed: int, steps: list<array{0: string|null, 1: string, 2: int, 3?: list<int>}>}, 1: list<string>}
      */
     private function captureFailingTrail(): array
     {

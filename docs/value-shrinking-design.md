@@ -1,6 +1,8 @@
 # Value shrinking — design
 
-Status: **proposed.** Sequence shrinking shipped ([shrinking-design.md](shrinking-design.md)): a failing trail is minimised to the shortest *subsequence* that reproduces the same failure. This doc is the other half the benchmark corpus already gestures at ([S4](shrinker-benchmarks.md#s4--merge-on-case-colliding-email-axis-3-valuestring--specified--motivates-future-value-shrinking)) — minimising the *drawn values* inside a trail once its length is minimal, so the counterexample is not just short but concrete: not "open two deals of random amounts and close the larger", but "open a deal of 51, open a deal of 50, close the larger".
+Status: **implemented (phase 1).** Int and pick value shrinking ship as designed below: a `DrawSource` layer (`StreamDrawSource` records, `ScriptedDrawSource` forces + falls back), a `ValueShrinker` binary-searching each draw toward its domain's low end gated by the same `FailureSignature`, forced draws in the `RUNABOUT_TRAIL` artifact's optional fourth element, and the failure output annotated with concrete drawn values. Validated with exact-value assertions on CRM S2 (`{suffix→1, amounts→51,50}`) and the forum revote (`pick`s → the first options). Phase 2 (string generators, S4) stays deferred. The design below is what was built.
+
+Sequence shrinking shipped ([shrinking-design.md](shrinking-design.md)): a failing trail is minimised to the shortest *subsequence* that reproduces the same failure. This doc is the other half the benchmark corpus already gestures at ([S4](shrinker-benchmarks.md#s4--merge-on-case-colliding-email-axis-3-valuestring--specified--motivates-future-value-shrinking)) — minimising the *drawn values* inside a trail once its length is minimal, so the counterexample is not just short but concrete: not "open two deals of random amounts and close the larger", but "open a deal of 51, open a deal of 50, close the larger".
 
 ## The gap
 

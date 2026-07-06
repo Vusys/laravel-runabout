@@ -97,11 +97,12 @@ final class JourneyRunner
      *
      * @param  non-empty-list<Journey>  $journeys
      * @param  list<TrailToken>  $tokens
+     * @param  array<int, array<int, int>>  $forcedDraws  Forced draw values per token index (value shrinking); absent ⇒ stream.
      *
      * @throws OrderNotViableException when a token is not runnable in its slot
      * @throws JourneyFailedException
      */
-    public function runTokens(array $journeys, int $seed, array $tokens, ?HttpDriver $http = null): Trail
+    public function runTokens(array $journeys, int $seed, array $tokens, ?HttpDriver $http = null, array $forcedDraws = []): Trail
     {
         $instances = $this->instances($journeys, $seed, $http);
 
@@ -110,8 +111,8 @@ final class JourneyRunner
             $byLabel[$instance->label ?? ''] = $instance;
         }
 
-        return $this->trail($instances, $seed, 'replayed', function (Trail $trail) use ($byLabel, $instances, $tokens, $seed): void {
-            foreach ($tokens as $token) {
+        return $this->trail($instances, $seed, 'replayed', function (Trail $trail) use ($byLabel, $instances, $tokens, $seed, $forcedDraws): void {
+            foreach ($tokens as $index => $token) {
                 $instance = $byLabel[$token->label ?? ''] ?? null;
 
                 if ($instance === null) {
@@ -128,7 +129,7 @@ final class JourneyRunner
                     throw new OrderNotViableException($token->labelled());
                 }
 
-                $this->executeStep($instance, $step, $instances, $trail, $seed, $token->run);
+                $this->executeStep($instance, $step, $instances, $trail, $seed, $token->run, $forcedDraws[$index] ?? null);
             }
         });
     }
@@ -305,7 +306,7 @@ final class JourneyRunner
      *
      * @param  non-empty-list<JourneyInstance>  $instances
      * @param  int  $runIndex  The 1-based run index that keys this execution's data stream.
-     * @param  list<int>|null  $forcedDraws  Values to force for this execution (value shrinking); null draws from the stream.
+     * @param  array<int, int>|null  $forcedDraws  Values to force for this execution (value shrinking); null draws from the stream.
      */
     private function executeStep(JourneyInstance $instance, Step $step, array $instances, Trail $trail, int $seed, int $runIndex, ?array $forcedDraws = null): void
     {
@@ -343,8 +344,9 @@ final class JourneyRunner
             }
         } finally {
             // Record what was drawn (even if the step or an invariant threw) so
-            // the value shrinker has this execution's baseline.
-            $trail->attachDraws($source->draws(), $source->isOpaque());
+            // the value shrinker has this execution's baseline; a forced source
+            // marks the token pinned so its values reach the replay artifact.
+            $trail->attachDraws($source->draws(), $source->isOpaque(), $forcedDraws !== null);
         }
 
         $instance->context->recordRun($step->name());
@@ -487,7 +489,7 @@ final class JourneyRunner
      * The draw source for an execution: a recording stream source normally, or
      * a scripted source (forced values, stream fallback) during value shrinking.
      *
-     * @param  list<int>|null  $forcedDraws
+     * @param  array<int, int>|null  $forcedDraws
      */
     private function executionSource(int $seed, ?string $label, string $step, int $run, ?array $forcedDraws): DrawSource
     {

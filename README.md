@@ -154,20 +154,22 @@ This is not a hypothetical: the package's own test suite plants five bugs of thi
 A seed reproduces a failing trail, but a repeat-heavy trail that fails on execution 23 hands you 23 steps to read when perhaps four matter. So when a shuffled or repeat-heavy trail fails, Runabout automatically minimises it — removing executions that don't change the outcome — and leads the failure output with the shortest trail that still fails *the same way*:
 
 ```
-Shrunk from 23 executions to 3 (12 replays):
+Shrunk from 13 executions to 3 (49 replays):
 Journey Tests\Journeys\MaxDealCacheJourney failed (replayed, seed 1351231025) at step 3 ("close largest opportunity").
 Trail:
-   1. open opportunity
-   2. open opportunity (run 2)
+   1. open opportunity [drew 1, 50]
+   2. open opportunity (run 2) [drew 1, 51]
 >  3. close largest opportunity
-Invariant "Account.largest_open_deal matches its source data" violated after step "close largest opportunity": Account 2 has a stale cached largest_open_deal: the column holds 416 but the source data gives 320.
-Replay with RUNABOUT_TRAIL='{"seed":1351231025,"steps":[[null,"open opportunity",3],[null,"open opportunity",4],[null,"close largest opportunity",1]]}'.
+Invariant "Account.largest_open_deal matches its source data" violated after step "close largest opportunity": Account 1 has a stale cached largest_open_deal: the column holds 51 but the source data gives 50.
+Replay with RUNABOUT_TRAIL='{"seed":1351231025,"steps":[[null,"open opportunity",3,[1,50]],[null,"open opportunity",4,[1,51]],[null,"close largest opportunity",1]]}'.
 Replay the full 13-execution trail with RUNABOUT_SEED=1351231025.
 ```
 
 "The same way" is exact: same exception class plus the invariant's (or failing step's) name, so shrinking never quietly swaps the reported bug for a different one it happened to trip while removing steps. The search is deterministic and budget-capped (`RUNABOUT_SHRINK=0` turns it off, `RUNABOUT_SHRINK_BUDGET` changes the cap).
 
-`RUNABOUT_TRAIL` replays that exact shrunk trail — order and data both — because each execution's random draws depend only on which execution it is, not on what ran before it. That is also what lets shrinking be sound: removing a step never shifts the survivors' draws. The package's `docs/shrinker-benchmarks.md` corpus grades the shrinker against bugs whose minimal counterexample is known in advance.
+Shrinking runs in two passes. First it minimises the trail's **length** (removing executions), then it minimises the **drawn values** inside what's left: each `randomInt`/`pick` is pushed toward the low end of its domain, stopping at the boundary that still reproduces. That is why the deal amounts above land at `50` and `51` (one lower and they'd tie, and the bug would vanish) and the noise name-suffix draws collapse to `1` — the trail reads like a hand-written test (`open opportunity [drew 1, 50]`) instead of a seed to go re-derive.
+
+`RUNABOUT_TRAIL` replays that exact shrunk trail — order and data both — because each execution's random draws depend only on which execution it is, not on what ran before it (value shrinking pins the minimised draws in the artifact's optional fourth element). That position-independence is also what lets shrinking be sound: removing a step never shifts the survivors' draws. The package's `docs/shrinker-benchmarks.md` corpus grades the shrinker against bugs whose minimal counterexample is known in advance.
 
 ## Steps
 

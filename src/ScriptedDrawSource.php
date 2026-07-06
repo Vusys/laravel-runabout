@@ -23,7 +23,7 @@ final class ScriptedDrawSource implements DrawSource
     /** @var list<Draw> */
     private array $draws = [];
 
-    /** @param  list<int>  $script  Forced values, consumed in draw order. */
+    /** @param  array<int, int>  $script  Forced values (positional, 0-indexed), consumed in draw order. */
     public function __construct(
         private readonly array $script,
         private readonly Randomizer $fallback,

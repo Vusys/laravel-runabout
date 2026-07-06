@@ -106,6 +106,28 @@ final class PostLifecycleJourneyTest extends TestCase
         $this->assertGreaterThan($uniform, $repeatHeavy);
     }
 
+    public function test_value_shrinking_reduces_the_revote_picks_to_the_first_options(): void
+    {
+        PostService::$buggyRevote = true;
+
+        try {
+            $this->journey(PostLifecycleJourney::class)->repeatHeavy()->shuffles(80)->run();
+            $this->fail('Expected a shuffled trail to catch the revote bug.');
+        } catch (JourneyFailedException $failure) {
+            $steps = $failure->trail()->artifact()['steps'];
+
+            // 'cast vote' draws pick(voters) then pick([1, -1]); value shrinking
+            // drives both toward index 0 — the first voter (ana) and first value.
+            $pinnedVotes = array_values(array_filter(
+                $steps,
+                fn (array $step): bool => $step[1] === 'cast vote' && array_key_exists(3, $step),
+            ));
+
+            $this->assertNotEmpty($pinnedVotes, 'A revote should pin its shrunk picks.');
+            $this->assertSame([0, 0], $pinnedVotes[0][3], 'Picks shrink to the first option (voter ana, value +1).');
+        }
+    }
+
     public function test_replaying_the_failing_seed_reproduces_the_failure(): void
     {
         PostService::$buggyRevote = true;

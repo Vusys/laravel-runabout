@@ -71,6 +71,46 @@ final class MaxDealCacheJourneyTest extends TestCase
         }
     }
 
+    public function test_value_shrinking_minimises_the_drawn_amounts(): void
+    {
+        CrmService::$buggyMaxDealCache = true;
+
+        try {
+            $this->journey(new MaxDealCacheJourney($this->account()))
+                ->repeatHeavy()
+                ->shuffles(60)
+                ->run();
+
+            $this->fail('Expected a shuffled trail to catch the largest-open-deal bug.');
+        } catch (JourneyFailedException $failure) {
+            $steps = $failure->trail()->artifact()['steps'];
+
+            $opens = array_values(array_filter($steps, fn (array $step): bool => $step[1] === 'open opportunity'));
+            $this->assertCount(2, $opens);
+
+            $suffixes = [];
+            $amounts = [];
+            foreach ($opens as $open) {
+                $this->assertArrayHasKey(3, $open, 'each open pins its drawn [name suffix, amount].');
+                $forced = $open[3] ?? [];
+                [$suffix, $amount] = $forced;
+                $suffixes[] = $suffix;
+                $amounts[] = $amount;
+            }
+            sort($amounts);
+
+            // The name-suffix draw (randomInt(1, 9999)) is pure noise → floor 1.
+            $this->assertSame([1, 1], $suffixes);
+            // The amounts (randomInt(50, 500)) drive toward min but stop at the
+            // boundary: {50, 50} would tie and pass, so {50, 51} stands.
+            $this->assertSame([50, 51], $amounts);
+
+            // "close largest" draws nothing, so it pins no values.
+            $close = array_values(array_filter($steps, fn (array $step): bool => $step[1] === 'close largest opportunity'))[0];
+            $this->assertArrayNotHasKey(3, $close);
+        }
+    }
+
     private function assertShrunkTrailReproduces(JourneyFailedException $failure): void
     {
         try {

@@ -329,20 +329,104 @@ final class PendingJourney
         $signature = FailureSignature::from($failure);
         $seed = $original->seed();
 
+        // Length first: reduce to the shortest reproducing subsequence.
         $result = (new TrailShrinker(
             fn (array $positions): bool => $this->candidateReproduces($runner, $seed, $this->tokensAt($tokens, $positions), $signature),
             $this->shrinkBudget(),
         ))->shrink(range(0, $count - 1));
 
-        if (count($result['positions']) >= $count) {
+        $shrunkTokens = $this->tokensAt($tokens, $result['positions']);
+        $sequenceReduced = count($shrunkTokens) < $count;
+
+        // Then values: minimise the draws inside the now-minimal trail.
+        $value = $this->valueShrink($runner, $seed, $shrunkTokens, $signature);
+        $valueReduced = $value['forced'] !== [];
+
+        if (! $sequenceReduced && ! $valueReduced) {
             return $failure;
         }
 
-        $replay = $this->replayFailure($runner, $seed, $this->tokensAt($tokens, $result['positions']));
+        $replay = $this->replayFailure($runner, $seed, $shrunkTokens, $value['forced']);
 
         return $replay instanceof JourneyFailedException
-            ? JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'])
+            ? JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'] + $value['replays'])
             : $failure;
+    }
+
+    /**
+     * Minimise the drawn values inside the already-length-minimal trail. Replays
+     * it once with recording to capture each surviving execution's draws, then
+     * pushes each toward the low end of its domain (keeping the same failure).
+     * Returns only the tokens whose values actually reduced — the rest reproduce
+     * from their stream and need no pinning.
+     *
+     * @param  list<TrailToken>  $shrunkTokens
+     * @return array{forced: array<int, array<int, int>>, replays: int}
+     */
+    private function valueShrink(JourneyRunner $runner, int $seed, array $shrunkTokens, FailureSignature $signature): array
+    {
+        $baselineTrail = $this->recordBaseline($runner, $seed, $shrunkTokens);
+
+        if (! $baselineTrail instanceof Trail) {
+            return ['forced' => [], 'replays' => 0];
+        }
+
+        /** @var array<int, list<Draw>> $baseline */
+        $baseline = [];
+        foreach ($shrunkTokens as $index => $token) {
+            if ($baselineTrail->isOpaqueAt($index)) {
+                continue; // touched the raw randomizer — not value-shrinkable
+            }
+
+            $draws = $baselineTrail->drawsAt($index);
+            if ($draws !== []) {
+                $baseline[$index] = $draws;
+            }
+        }
+
+        if ($baseline === []) {
+            return ['forced' => [], 'replays' => 1];
+        }
+
+        $result = (new ValueShrinker(
+            fn (array $forced): bool => $this->candidateReproduces($runner, $seed, $shrunkTokens, $signature, $forced),
+            $this->shrinkBudget(),
+        ))->shrink($baseline);
+
+        // Pin only the tokens whose values changed; unchanged draws reproduce
+        // from the stream, so leaving them unpinned keeps the artifact clean.
+        $reduced = [];
+        foreach ($result['forced'] as $token => $values) {
+            $baselineValues = array_map(fn (Draw $draw): int => $draw->value, $baseline[$token]);
+
+            if ($values !== $baselineValues) {
+                $reduced[$token] = $values;
+            }
+        }
+
+        return ['forced' => $reduced, 'replays' => $result['replays'] + 1];
+    }
+
+    /**
+     * Replay the minimal token list once to capture its recorded draws — the
+     * baseline for value shrinking. It reproduces (so it throws); the thrown
+     * failure carries the trail with the draws attached.
+     *
+     * @param  list<TrailToken>  $tokens
+     */
+    private function recordBaseline(JourneyRunner $runner, int $seed, array $tokens): ?Trail
+    {
+        try {
+            ($this->wrapper)(function () use ($runner, $seed, $tokens): void {
+                $runner->runTokens($this->journeys, $seed, $tokens, $this->http);
+            });
+        } catch (JourneyFailedException $failure) {
+            return $failure->trail();
+        } catch (OrderNotViableException|InvalidJourneyException) {
+            return null;
+        }
+
+        return null;
     }
 
     /**
@@ -373,12 +457,13 @@ final class PendingJourney
      * notify onTrail — they are internal to the search.
      *
      * @param  list<TrailToken>  $candidate
+     * @param  array<int, array<int, int>>  $forcedDraws
      */
-    private function candidateReproduces(JourneyRunner $runner, int $seed, array $candidate, FailureSignature $signature): bool
+    private function candidateReproduces(JourneyRunner $runner, int $seed, array $candidate, FailureSignature $signature, array $forcedDraws = []): bool
     {
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $candidate): void {
-                $runner->runTokens($this->journeys, $seed, $candidate, $this->http);
+            ($this->wrapper)(function () use ($runner, $seed, $candidate, $forcedDraws): void {
+                $runner->runTokens($this->journeys, $seed, $candidate, $this->http, $forcedDraws);
             });
         } catch (JourneyFailedException $failure) {
             return FailureSignature::from($failure)->matches($signature);
@@ -391,15 +476,17 @@ final class PendingJourney
 
     /**
      * Replay the shrunk token list one final time to capture its failure in
-     * replayed mode (whose message carries the RUNABOUT_TRAIL replay line).
+     * replayed mode (whose message carries the RUNABOUT_TRAIL replay line, with
+     * any value-shrunk draws pinned).
      *
      * @param  list<TrailToken>  $tokens
+     * @param  array<int, array<int, int>>  $forcedDraws
      */
-    private function replayFailure(JourneyRunner $runner, int $seed, array $tokens): ?JourneyFailedException
+    private function replayFailure(JourneyRunner $runner, int $seed, array $tokens, array $forcedDraws = []): ?JourneyFailedException
     {
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $tokens): void {
-                $runner->runTokens($this->journeys, $seed, $tokens, $this->http);
+            ($this->wrapper)(function () use ($runner, $seed, $tokens, $forcedDraws): void {
+                $runner->runTokens($this->journeys, $seed, $tokens, $this->http, $forcedDraws);
             });
         } catch (JourneyFailedException $failure) {
             return $failure;
@@ -590,13 +677,13 @@ final class PendingJourney
      */
     private function replay(JourneyRunner $runner, array $artifact): void
     {
-        ['seed' => $seed, 'tokens' => $tokens] = $this->parseArtifact($artifact);
+        ['seed' => $seed, 'tokens' => $tokens, 'forcedDraws' => $forcedDraws] = $this->parseArtifact($artifact);
 
         $trail = null;
 
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $tokens, &$trail): void {
-                $trail = $runner->runTokens($this->journeys, $seed, $tokens, $this->http);
+            ($this->wrapper)(function () use ($runner, $seed, $tokens, $forcedDraws, &$trail): void {
+                $trail = $runner->runTokens($this->journeys, $seed, $tokens, $this->http, $forcedDraws);
             });
         } catch (OrderNotViableException $notViable) {
             throw new InvalidJourneyException(sprintf(
@@ -641,7 +728,7 @@ final class PendingJourney
      * Validate a decoded artifact into a seed and typed tokens.
      *
      * @param  array<array-key, mixed>  $artifact
-     * @return array{seed: int, tokens: list<TrailToken>}
+     * @return array{seed: int, tokens: list<TrailToken>, forcedDraws: array<int, array<int, int>>}
      */
     private function parseArtifact(array $artifact): array
     {
@@ -653,6 +740,8 @@ final class PendingJourney
         }
 
         $tokens = [];
+        $forcedDraws = [];
+        $index = 0;
 
         foreach ($steps as $step) {
             if (! is_array($step) || ! array_key_exists(0, $step) || ! array_key_exists(1, $step) || ! array_key_exists(2, $step)) {
@@ -668,8 +757,27 @@ final class PendingJourney
             }
 
             $tokens[] = new TrailToken($label, $name, $run);
+
+            // Optional fourth element: forced draw values pinned by value shrinking.
+            if (array_key_exists(3, $step)) {
+                if (! is_array($step[3])) {
+                    throw new InvalidJourneyException('A trail step\'s forced draws (element 4) must be a list of integers.');
+                }
+
+                $values = [];
+                foreach ($step[3] as $value) {
+                    if (! is_int($value)) {
+                        throw new InvalidJourneyException('A trail step\'s forced draws (element 4) must be a list of integers.');
+                    }
+                    $values[] = $value;
+                }
+
+                $forcedDraws[$index] = $values;
+            }
+
+            $index++;
         }
 
-        return ['seed' => $seed, 'tokens' => $tokens];
+        return ['seed' => $seed, 'tokens' => $tokens, 'forcedDraws' => $forcedDraws];
     }
 }
