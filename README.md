@@ -291,6 +291,8 @@ public function invariants(): array
         Invariants::cachedColumnMatches(Post::class, 'score', fn (Post $post): int => (int) $post->votes()->sum('value')),
 
         // A quota column must equal the starting allowance minus actual spend.
+        // The allowance is a constant here, or a closure when it differs per row
+        // (by plan, tier, tenant): quotaBalances(..., fn ($row): int => $row->plan_allowance, ...).
         Invariants::quotaBalances(Post::class, 'reports_remaining', 2, fn (Post $post): int => $post->reports()->count()),
 
         // A state column may only move along declared edges.
@@ -307,6 +309,8 @@ public function invariants(): array
 ```
 
 `legalTransitions` is stateful: it tracks each row's state across the trail and objects the moment a row jumps between states no declared edge connects. Invariants are collected once per trail, so a stateful invariant lives exactly as long as the trail it watches.
+
+Invariants are checked after every step — but not before the first one. If a state invariant watches a row that exists *before* the journey (rather than one created in a step), its first observation is the state the opening step left, so that step's transition is mistaken for the row's initial state. Add `->fromStart()` to check the invariant once at the trail's start too, so it sees the true baseline: `Invariants::legalTransitions(...)->fromStart()`.
 
 ## Execution modes
 

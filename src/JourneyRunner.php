@@ -184,6 +184,7 @@ final class JourneyRunner
         $failure = null;
 
         try {
+            $this->checkBaseline($instances, $seed);
             $body($trail);
         } catch (OrderNotViableException $notViable) {
             $failure = $notViable;
@@ -343,6 +344,46 @@ final class JourneyRunner
     }
 
     /**
+     * Check the invariants that opted into a baseline (Invariant::fromStart())
+     * once before any step runs, so a state invariant can observe a row that
+     * existed before the journey in its true initial state. Each runs inside
+     * its owning instance's aroundStep() wrapper, against a dedicated baseline
+     * stream; a violation here is a normal failure (reported "before any step
+     * ran").
+     *
+     * @param  non-empty-list<JourneyInstance>  $instances
+     */
+    private function checkBaseline(array $instances, int $seed): void
+    {
+        foreach ($instances as $owner) {
+            $baseline = array_values(array_filter(
+                $owner->invariants,
+                fn (Invariant $invariant): bool => $invariant->checksAtStart(),
+            ));
+
+            if ($baseline === []) {
+                continue;
+            }
+
+            $owner->context->useStream($this->baselineStream($seed, $owner->label));
+
+            $this->wrapped($owner, function () use ($owner, $baseline): void {
+                foreach ($baseline as $invariant) {
+                    try {
+                        $invariant->check($owner->context);
+                    } catch (Throwable $caught) {
+                        throw InvariantViolationException::make(
+                            $owner->labelled($invariant->name()),
+                            $owner->labelled('(trail start)'),
+                            $caught,
+                        );
+                    }
+                }
+            });
+        }
+    }
+
+    /**
      * Run an execution inside the instance's aroundStep() hook, guarding
      * against an override that forgets to invoke it — a silently skipped
      * step would make the journey test less than it claims.
@@ -439,6 +480,12 @@ final class JourneyRunner
     private function teardownStream(int $seed, ?string $label): Randomizer
     {
         return new Randomizer(new Mt19937(crc32(sprintf('%d|__teardown__|%s', $seed, $label ?? ''))));
+    }
+
+    /** The trail-start stream that baseline invariant checks draw from. */
+    private function baselineStream(int $seed, ?string $label): Randomizer
+    {
+        return new Randomizer(new Mt19937(crc32(sprintf('%d|__baseline__|%s', $seed, $label ?? ''))));
     }
 
     /**
