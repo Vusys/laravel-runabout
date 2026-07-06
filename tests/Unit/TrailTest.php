@@ -12,9 +12,9 @@ final class TrailTest extends TestCase
     public function test_describe_numbers_steps_marks_the_last_and_counts_repeats(): void
     {
         $trail = new Trail(123, 'shuffled');
-        $trail->record('publish post');
-        $trail->record('cast vote');
-        $trail->record('cast vote');
+        $trail->record(null, 'publish post', 1);
+        $trail->record(null, 'cast vote', 1);
+        $trail->record(null, 'cast vote', 2);
 
         $this->assertSame(
             '   1. publish post'.PHP_EOL.
@@ -27,8 +27,8 @@ final class TrailTest extends TestCase
     public function test_describe_can_leave_the_last_step_unmarked_for_passing_trails(): void
     {
         $trail = new Trail(123, 'shuffled');
-        $trail->record('publish post');
-        $trail->record('cast vote');
+        $trail->record(null, 'publish post', 1);
+        $trail->record(null, 'cast vote', 1);
 
         $this->assertSame(
             '   1. publish post'.PHP_EOL.

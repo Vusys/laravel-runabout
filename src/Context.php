@@ -36,11 +36,25 @@ final class Context
     private bool $clockUnwindRegistered = false;
 
     public function __construct(
-        private readonly Randomizer $randomizer,
+        private Randomizer $randomizer,
         private readonly ?HttpDriver $http = null,
         ?DeferredStack $deferred = null,
     ) {
         $this->deferred = $deferred ?? new DeferredStack;
+    }
+
+    /**
+     * @internal Install the randomness stream for the execution about to run.
+     *
+     * Under seed schema v2 the runner swaps in a fresh per-execution stream
+     * before every step (and its invariant checks), so randomInt()/pick()/
+     * randomizer() draw values that depend only on which execution it is —
+     * never on what ran before it. That position-independence is what lets a
+     * shrunk or reordered trail reproduce a failure verbatim.
+     */
+    public function useStream(Randomizer $randomizer): void
+    {
+        $this->randomizer = $randomizer;
     }
 
     public function remember(string $key, mixed $value): mixed

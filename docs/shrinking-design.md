@@ -1,6 +1,6 @@
 # Shrinking — design
 
-Status: **design accepted, implementation deferred.** The prerequisite (seed schema v2, below) should land before anything is published; the shrinker itself waits until dogfooding produces the long failing trails it exists for.
+Status: **implemented.** Seed schema v2, explicit-order replay (`RUNABOUT_TRAIL`), and the budgeted ddmin shrink loop all shipped; shrinking runs automatically on a failing shuffled/repeat-heavy trail (`RUNABOUT_SHRINK=0` disables). The long failing trails it exists for come from the [shrinker benchmark corpus](shrinker-benchmarks.md), a toy CRM of planted bugs with known-minimal counterexamples. The design below is what was built; one refinement learned in the process is recorded at the end.
 
 A seed replays a failing trail exactly, and that solves reproduction. It does not solve comprehension: a repeat-heavy trail that fails on execution 23 hands the developer 23 steps of reading, of which perhaps four matter. Shrinking is the missing half — automatically minimising a failing trail to the shortest subsequence that still produces the same failure, so the failure output reads like the bug report a colleague would have written by hand: "create, rename, create, delete — counter is now wrong".
 
@@ -91,3 +91,7 @@ RUNABOUT_SEED=1690934040 vendor/bin/phpunit --filter=...
 1. **Seed schema v2** (picker stream + per-execution data streams): next engine change, before anything is pushed, alone in its own commit with the suite recalibrated.
 2. **Explicit-order replay** (`RUNABOUT_TRAIL`, `'replayed'` mode): with or shortly after v2 — independently useful, and the shrinker's substrate.
 3. **The shrink loop itself**: after flagship-journey dogfooding confirms the pain it exists to relieve, using the budgeted ddmin loop above.
+
+## Refinement learned while building
+
+The open worry was non-monotonic bugs — a failure that needs a step which *looks* like removable noise, so that greedy single-step removal drops it and the bug "disappears". Benchmark **S6** builds exactly this: a stale-cache bug that needs a `view` (a pure read) between two mutations. The loop handles it correctly with no special machinery, because the shrink oracle is *reproduces the same failure*, not *is shorter*: a candidate with the read removed **passes**, so it is rejected and the read is kept. ddmin is only unsound on non-monotonic failures when the oracle is approximate; with the exact same-failure oracle here, greedy removal never keeps a candidate that stopped failing. So the termination rule ("sweep until a full pass removes nothing") is sound as written — the concern does not require a "known-required" set after all.

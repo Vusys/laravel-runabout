@@ -32,12 +32,37 @@ final class JourneyFailedException extends RuntimeException
 
         // The canonical order reproduces by simply running again; a seeded
         // replay would run a shuffled trail instead and take a different path.
-        if ($trail->mode() !== 'canonical') {
+        // A replayed trail carries its own order, so it replays as an artifact.
+        if ($trail->mode() === 'replayed') {
+            $artifact = json_encode($trail->artifact());
+            $message .= sprintf("\nReplay with RUNABOUT_TRAIL='%s'.", $artifact === false ? '{}' : $artifact);
+        } elseif ($trail->mode() !== 'canonical') {
             $message .= sprintf("\nReplay with RUNABOUT_SEED=%d.", $trail->seed());
         }
 
         $exception = new self($message, 0, $cause);
         $exception->trail = $trail;
+
+        return $exception;
+    }
+
+    /**
+     * Re-frame a failure around its shrunk trail: the shrunk trail (and its
+     * RUNABOUT_TRAIL replay line, carried in the replayed-mode message) becomes
+     * the headline, with the original full trail one line away for anyone who
+     * wants to see the whole thing.
+     *
+     * @param  self  $shrunkReplay  The replayed-mode failure of the shrunk trail.
+     */
+    public static function shrunk(self $shrunkReplay, int $originalExecutions, int $originalSeed, int $replays): self
+    {
+        $shrunkExecutions = count($shrunkReplay->trail()->tokens());
+
+        $message = sprintf("Shrunk from %d executions to %d (%d replays):\n%s", $originalExecutions, $shrunkExecutions, $replays, $shrunkReplay->getMessage())
+            .sprintf("\nReplay the full %d-execution trail with RUNABOUT_SEED=%d.", $originalExecutions, $originalSeed);
+
+        $exception = new self($message, 0, $shrunkReplay->getPrevious());
+        $exception->trail = $shrunkReplay->trail();
 
         return $exception;
     }

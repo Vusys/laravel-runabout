@@ -8,6 +8,7 @@ use Closure;
 use Generator;
 use Illuminate\Support\Facades\DB;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
+use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Exceptions\OrderNotViableException;
 
 /**
@@ -23,6 +24,9 @@ final class PendingJourney
     private int $repeatBias = 1;
 
     private ?int $exhaustiveLimit = null;
+
+    /** @var array<array-key, mixed>|null A seed + token list to replay verbatim instead of shuffling. */
+    private ?array $trailArtifact = null;
 
     /** @var list<Closure(Trail): void> */
     private array $onTrail = [];
@@ -66,6 +70,23 @@ final class PendingJourney
     public function seed(int $seed): self
     {
         $this->seed = $seed;
+
+        return $this;
+    }
+
+    /**
+     * Replay one explicit trail — a seed plus an ordered token list — instead
+     * of shuffling. This is the mode a shrunk trail (or any RUNABOUT_TRAIL
+     * value) reproduces under: the order travels with the artifact, so unlike a
+     * bare seed it reproduces repeat-heavy and partial trails too. Pass the
+     * artifact array ({seed, steps}) or its JSON string; a leading "@" on the
+     * string reads it from that file path.
+     *
+     * @param  array<array-key, mixed>|string  $artifact
+     */
+    public function trail(array|string $artifact): self
+    {
+        $this->trailArtifact = is_string($artifact) ? $this->decodeArtifact($artifact) : $artifact;
 
         return $this;
     }
@@ -235,34 +256,170 @@ final class PendingJourney
             return;
         }
 
+        $artifact = $this->trailArtifact ?? $this->artifactFromEnvironment();
+
+        if ($artifact !== null) {
+            $this->registerVerbosePrinter(total: 1);
+            $this->replay($runner, $artifact);
+
+            return;
+        }
+
         $replaySeed = $this->seed ?? $this->seedFromEnvironment();
 
         if ($replaySeed !== null) {
             $this->registerVerbosePrinter(total: 1);
-            $this->trail($runner, $replaySeed, shuffle: true);
+            $this->runTrail($runner, $replaySeed, shuffle: true);
 
             return;
         }
 
         $this->registerVerbosePrinter(total: 1 + $this->shuffles);
-        $this->trail($runner, $this->deriveSeed(0), shuffle: false);
+        $this->runTrail($runner, $this->deriveSeed(0), shuffle: false);
 
         for ($i = 1; $i <= $this->shuffles; $i++) {
-            $this->trail($runner, $this->deriveSeed($i), shuffle: true);
+            $this->runTrail($runner, $this->deriveSeed($i), shuffle: true);
         }
     }
 
-    private function trail(JourneyRunner $runner, int $seed, bool $shuffle): void
+    private function runTrail(JourneyRunner $runner, int $seed, bool $shuffle): void
     {
         $trail = null;
 
-        ($this->wrapper)(function () use ($runner, $seed, $shuffle, &$trail): void {
-            $trail = $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias);
-        });
+        try {
+            ($this->wrapper)(function () use ($runner, $seed, $shuffle, &$trail): void {
+                $trail = $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias);
+            });
+        } catch (JourneyFailedException $failure) {
+            // A failure has already cost a red build; spending a few seconds to
+            // minimise it to the executions that matter is the right default.
+            throw $this->shrink($runner, $failure);
+        }
 
         if ($trail instanceof Trail) {
             $this->notify($trail);
         }
+    }
+
+    /**
+     * Minimise a failing trail to the shortest token list that reproduces the
+     * same failure, and re-frame the exception around it. Off for canonical
+     * (reproduces by re-running) and structural failures (deadlocks, runaways,
+     * broken journeys — no meaningful subsequence), and skippable with
+     * RUNABOUT_SHRINK=0.
+     */
+    private function shrink(JourneyRunner $runner, JourneyFailedException $failure): JourneyFailedException
+    {
+        if (! $this->shrinkingEnabled() || ! in_array($failure->trail()->mode(), ['shuffled', 'repeat-heavy'], true)) {
+            return $failure;
+        }
+
+        if ($failure->getPrevious() instanceof InvalidJourneyException) {
+            return $failure;
+        }
+
+        $original = $failure->trail();
+        $tokens = $original->tokens();
+        $count = count($tokens);
+
+        if ($count < 2) {
+            return $failure;
+        }
+
+        $signature = FailureSignature::from($failure);
+        $seed = $original->seed();
+
+        $result = (new TrailShrinker(
+            fn (array $positions): bool => $this->candidateReproduces($runner, $seed, $this->tokensAt($tokens, $positions), $signature),
+            $this->shrinkBudget(),
+        ))->shrink(range(0, $count - 1));
+
+        if (count($result['positions']) >= $count) {
+            return $failure;
+        }
+
+        $replay = $this->replayFailure($runner, $seed, $this->tokensAt($tokens, $result['positions']));
+
+        return $replay instanceof JourneyFailedException
+            ? JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'])
+            : $failure;
+    }
+
+    /**
+     * The tokens at the given positions, in order — the bridge between the
+     * shrinker's position list and a replayable token list.
+     *
+     * @param  list<TrailToken>  $tokens
+     * @param  array<array-key, mixed>  $positions
+     * @return list<TrailToken>
+     */
+    private function tokensAt(array $tokens, array $positions): array
+    {
+        $selected = [];
+
+        foreach ($positions as $position) {
+            if (is_int($position) && array_key_exists($position, $tokens)) {
+                $selected[] = $tokens[$position];
+            }
+        }
+
+        return $selected;
+    }
+
+    /**
+     * Replay a candidate token order under the reset wrapper and report whether
+     * it fails the same way. A non-viable order (a removed dependency) or a
+     * structural error counts as "does not reproduce"; probe replays never
+     * notify onTrail — they are internal to the search.
+     *
+     * @param  list<TrailToken>  $candidate
+     */
+    private function candidateReproduces(JourneyRunner $runner, int $seed, array $candidate, FailureSignature $signature): bool
+    {
+        try {
+            ($this->wrapper)(function () use ($runner, $seed, $candidate): void {
+                $runner->runTokens($this->journeys, $seed, $candidate, $this->http);
+            });
+        } catch (JourneyFailedException $failure) {
+            return FailureSignature::from($failure)->matches($signature);
+        } catch (OrderNotViableException|InvalidJourneyException) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * Replay the shrunk token list one final time to capture its failure in
+     * replayed mode (whose message carries the RUNABOUT_TRAIL replay line).
+     *
+     * @param  list<TrailToken>  $tokens
+     */
+    private function replayFailure(JourneyRunner $runner, int $seed, array $tokens): ?JourneyFailedException
+    {
+        try {
+            ($this->wrapper)(function () use ($runner, $seed, $tokens): void {
+                $runner->runTokens($this->journeys, $seed, $tokens, $this->http);
+            });
+        } catch (JourneyFailedException $failure) {
+            return $failure;
+        } catch (OrderNotViableException|InvalidJourneyException) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private function shrinkingEnabled(): bool
+    {
+        return getenv('RUNABOUT_SHRINK') !== '0';
+    }
+
+    private function shrinkBudget(): int
+    {
+        $budget = getenv('RUNABOUT_SHRINK_BUDGET');
+
+        return is_string($budget) && ctype_digit($budget) && (int) $budget > 0 ? (int) $budget : 200;
     }
 
     private function notify(Trail $trail): void
@@ -413,5 +570,106 @@ final class PendingJourney
         $seed = getenv('RUNABOUT_SEED');
 
         return is_string($seed) && is_numeric($seed) ? (int) $seed : null;
+    }
+
+    /** @return array<array-key, mixed>|null */
+    private function artifactFromEnvironment(): ?array
+    {
+        $raw = getenv('RUNABOUT_TRAIL');
+
+        return is_string($raw) && $raw !== '' ? $this->decodeArtifact($raw) : null;
+    }
+
+    /**
+     * Replay one explicit token order. A non-viable order (a token whose step
+     * is no longer reachable) is a broken artifact, not a test failure, so it
+     * surfaces as an InvalidJourneyException; a genuine assertion or invariant
+     * failure propagates untouched, which is how a replay reproduces a bug.
+     *
+     * @param  array<array-key, mixed>  $artifact
+     */
+    private function replay(JourneyRunner $runner, array $artifact): void
+    {
+        ['seed' => $seed, 'tokens' => $tokens] = $this->parseArtifact($artifact);
+
+        $trail = null;
+
+        try {
+            ($this->wrapper)(function () use ($runner, $seed, $tokens, &$trail): void {
+                $trail = $runner->runTokens($this->journeys, $seed, $tokens, $this->http);
+            });
+        } catch (OrderNotViableException $notViable) {
+            throw new InvalidJourneyException(sprintf(
+                'The replay trail is not viable: %s is no longer reachable in this order (an after()/when() dependency it relied on may have been removed).',
+                $notViable->getMessage(),
+            ), 0, $notViable);
+        }
+
+        if ($trail instanceof Trail) {
+            $this->notify($trail);
+        }
+    }
+
+    /**
+     * Read a RUNABOUT_TRAIL value: JSON, or "@path" to read the JSON from disk.
+     *
+     * @return array<array-key, mixed>
+     */
+    private function decodeArtifact(string $raw): array
+    {
+        if (str_starts_with($raw, '@')) {
+            $path = substr($raw, 1);
+            $contents = @file_get_contents($path);
+
+            if ($contents === false) {
+                throw new InvalidJourneyException(sprintf('Could not read the trail artifact file "%s".', $path));
+            }
+
+            $raw = $contents;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            throw new InvalidJourneyException('A trail artifact must be JSON like {"seed":123,"steps":[[null,"step name",1]]}.');
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Validate a decoded artifact into a seed and typed tokens.
+     *
+     * @param  array<array-key, mixed>  $artifact
+     * @return array{seed: int, tokens: list<TrailToken>}
+     */
+    private function parseArtifact(array $artifact): array
+    {
+        $seed = $artifact['seed'] ?? null;
+        $steps = $artifact['steps'] ?? null;
+
+        if (! is_int($seed) || ! is_array($steps)) {
+            throw new InvalidJourneyException('A trail artifact needs an integer "seed" and a "steps" list.');
+        }
+
+        $tokens = [];
+
+        foreach ($steps as $step) {
+            if (! is_array($step) || ! array_key_exists(0, $step) || ! array_key_exists(1, $step) || ! array_key_exists(2, $step)) {
+                throw new InvalidJourneyException('Each trail step must be a [label, step, run] triple.');
+            }
+
+            $label = $step[0];
+            $name = $step[1];
+            $run = $step[2];
+
+            if (($label !== null && ! is_string($label)) || ! is_string($name) || ! is_int($run)) {
+                throw new InvalidJourneyException('Each trail step must be [label|null, step string, run int].');
+            }
+
+            $tokens[] = new TrailToken($label, $name, $run);
+        }
+
+        return ['seed' => $seed, 'tokens' => $tokens];
     }
 }

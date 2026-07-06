@@ -92,16 +92,18 @@ final class PostLifecycleJourneyTest extends TestCase
         $this->assertShufflingCatches('Post.reports_remaining balances against its quota', shuffles: 30);
     }
 
-    public function test_repeat_heavy_mode_finds_the_revote_bug_in_fewer_trails(): void
+    public function test_repeat_heavy_mode_finds_the_revote_bug_more_often(): void
     {
         PostService::$buggyRevote = true;
 
-        $uniform = $this->trailsToFirstCatch(repeatBias: 1);
-        $repeatHeavy = $this->trailsToFirstCatch(repeatBias: 5);
+        $window = 60;
+        $uniform = $this->catchesAcross(repeatBias: 1, seeds: $window);
+        $repeatHeavy = $this->catchesAcross(repeatBias: 5, seeds: $window);
 
-        // The revote bug needs the same voter to vote twice, so a picker that
-        // favours re-running repeatable steps reaches it much sooner.
-        $this->assertLessThan($uniform, $repeatHeavy);
+        // The revote bug needs the same voter to vote twice on one post, so a
+        // picker that favours re-running repeatable steps hits it in far more
+        // of the same seeds than uniform shuffling does.
+        $this->assertGreaterThan($uniform, $repeatHeavy);
     }
 
     public function test_replaying_the_failing_seed_reproduces_the_failure(): void
@@ -123,10 +125,12 @@ final class PostLifecycleJourneyTest extends TestCase
         }
     }
 
-    /** How many seeded trails a shuffled run needs before the first failure. */
-    private function trailsToFirstCatch(int $repeatBias): int
+    /** How many of the first $seeds seeded trails catch a failure at this bias. */
+    private function catchesAcross(int $repeatBias, int $seeds): int
     {
-        for ($i = 1; $i <= 150; $i++) {
+        $catches = 0;
+
+        for ($i = 1; $i <= $seeds; $i++) {
             $seed = crc32(PostLifecycleJourney::class.'#'.$i);
             $connection = DB::connection();
             $connection->beginTransaction();
@@ -134,14 +138,14 @@ final class PostLifecycleJourneyTest extends TestCase
             try {
                 (new JourneyRunner)->run(new PostLifecycleJourney, $seed, shuffle: true, repeatBias: $repeatBias);
             } catch (Throwable) {
-                return $i;
+                $catches++;
             } finally {
                 $connection->rollBack();
                 Date::setTestNow();
             }
         }
 
-        $this->fail(sprintf('No trail failed within 150 seeds at repeat bias %d.', $repeatBias));
+        return $catches;
     }
 
     private function assertShufflingCatches(string $invariant, int $shuffles): void

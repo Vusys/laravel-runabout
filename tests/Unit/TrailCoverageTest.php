@@ -119,15 +119,17 @@ final class TrailCoverageTest extends TestCase
     }
 
     /**
-     * @param  'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'  $mode
+     * @param  'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'|'replayed'  $mode
      * @param  list<string>  $steps
      */
     private function trail(string $mode, array $steps): Trail
     {
         $trail = new Trail(1, $mode);
+        $runs = [];
 
         foreach ($steps as $step) {
-            $trail->record($step);
+            $runs[$step] = ($runs[$step] ?? 0) + 1;
+            $trail->record(null, $step, $runs[$step]);
         }
 
         return $trail;
