@@ -304,6 +304,10 @@ public function invariants(): array
 
         // Soft-deleted parents must not keep live children.
         Invariants::trashedLeavesNoLiveChildren(Post::class, fn (Post $post): int => $post->votes()->count(), 'votes'),
+
+        // No two rows share a column tuple — what a unique constraint (or a
+        // firstOrCreate/dedup path) is meant to guarantee.
+        Invariants::uniqueBy(Vote::class, ['post_id', 'voter']),
     ];
 }
 ```

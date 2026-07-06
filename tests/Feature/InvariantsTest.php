@@ -150,6 +150,31 @@ final class InvariantsTest extends TestCase
         $invariant->check($this->context());
     }
 
+    public function test_unique_by_passes_when_the_column_tuple_is_unique(): void
+    {
+        $community = Community::query()->create(['name' => 'general']);
+        $community->posts()->create(['title' => 'first']);
+        $community->posts()->create(['title' => 'second']);
+
+        Invariants::uniqueBy(Post::class, ['community_id', 'title'])->check($this->context());
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_unique_by_catches_a_duplicate_tuple(): void
+    {
+        $community = Community::query()->create(['name' => 'general']);
+        $community->posts()->create(['title' => 'dupe']);
+        $community->posts()->create(['title' => 'dupe']);
+
+        $invariant = Invariants::uniqueBy(Post::class, ['community_id', 'title']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('share (community_id, title) = ('); // names the duplicated tuple
+
+        $invariant->check($this->context());
+    }
+
     private function draftPost(): Post
     {
         return Community::query()->create(['name' => 'general'])

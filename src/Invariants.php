@@ -199,6 +199,48 @@ final class Invariants
     }
 
     /**
+     * No two rows may share the given column tuple — the guarantee a unique
+     * constraint (or a firstOrCreate / dedup path) is meant to provide. Catches
+     * duplicate rows a missing or wrongly-scoped key lets through: "at most one
+     * metric per report", "one leaderboard period per (tenant, start)",
+     * "one acknowledgement per item". Reads all rows (default scope, so
+     * soft-deleted rows are excluded and may legitimately repeat a live key).
+     *
+     * @template TModel of Model
+     *
+     * @param  class-string<TModel>  $model
+     * @param  non-empty-list<string>  $columns
+     */
+    public static function uniqueBy(string $model, array $columns): Invariant
+    {
+        return Invariant::make(
+            sprintf('%s rows are unique by (%s)', class_basename($model), implode(', ', $columns)),
+            function () use ($model, $columns): void {
+                /** @var array<string, string> $seen */
+                $seen = [];
+
+                foreach (self::typed($model, (new $model)->newQuery()->get()) as $row) {
+                    $values = array_map(fn (string $column): string => var_export($row->getAttribute($column), true), $columns);
+                    $key = implode('|', $values);
+
+                    if (isset($seen[$key])) {
+                        throw new RuntimeException(sprintf(
+                            '%s rows %s and %s share (%s) = (%s).',
+                            class_basename($model),
+                            $seen[$key],
+                            self::key($row),
+                            implode(', ', $columns),
+                            implode(', ', $values),
+                        ));
+                    }
+
+                    $seen[$key] = self::key($row);
+                }
+            },
+        );
+    }
+
+    /**
      * PHPStan cannot carry a template type through Builder<static>, so rows
      * come back typed as the base Model; the instanceof check restores the
      * concrete type (and is a runtime no-op).
