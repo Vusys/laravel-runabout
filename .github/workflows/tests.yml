@@ -18,11 +18,12 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.3', '8.4']
-        laravel: ['11.0', '12.0']
+        laravel: ['11.0', '12.0', '13.0']
         include:
           # Map Laravel version → Testbench version
           - { laravel: '11.0', testbench: '9.0' }
           - { laravel: '12.0', testbench: '10.0' }
+          - { laravel: '13.0', testbench: '11.0' }
 
     name: "PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}"
 
@@ -63,18 +64,16 @@ jobs:
       # Laravel 11's security-support window closed (~March 2026), so
       # advisories against the 11.x line are never patched and Composer's
       # resolver refuses to install every affected version — the cell can't
-      # install at all without ignoring them explicitly. All are app-level
-      # vulns unrelated to the journey-runner code under test. 12.x stays
-      # strict.
+      # install at all without ignoring them. Enumerating advisory IDs is
+      # brittle: every newly published advisory against the EOL line breaks
+      # this cell again (that is exactly how it broke). Ignore the whole
+      # laravel/framework package instead, so the cell stays green as the
+      # advisory list grows. All are app-level vulns unrelated to the
+      # journey-runner code under test. 12.x and 13.x stay strict.
       - name: Allow EOL Laravel 11 (ignore unpatched advisories)
         if: matrix.laravel == '11.0'
         run: >-
-          composer config policy.advisories.ignore-id
-          PKSA-mdq4-51ck-6kdq
-          PKSA-8qx3-n5y5-vvnd
-          PKSA-q46n-4fdk-zjr4
-          PKSA-qzrn-rnz3-85w1
-          PKSA-w7xr-vk7n-rstm
+          composer config --json policy.advisories.ignore '["laravel/framework"]'
 
       - name: Install dependencies
         run: composer update --prefer-dist --no-interaction --no-progress
