@@ -20,16 +20,38 @@ final readonly class HttpDriver
      * @param  Closure(Authenticatable): void  $authenticate
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $json
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $form
+     * @param  Closure(array<string, mixed>): void|null  $session  Applies session data to the next request; null when the test case exposes no session.
      */
     public function __construct(
         private Closure $authenticate,
         private Closure $json,
         private Closure $form,
+        private ?Closure $session = null,
     ) {}
 
     public function authenticate(Authenticatable $user): void
     {
         ($this->authenticate)($user);
+    }
+
+    /**
+     * Apply an actor's session data to the next request. A no-op for empty
+     * session data; a clear error if an actor carries session but the driver
+     * was built without a session hook.
+     *
+     * @param  array<string, mixed>  $session
+     */
+    public function applySession(array $session): void
+    {
+        if ($session === []) {
+            return;
+        }
+
+        if (! $this->session instanceof Closure) {
+            throw new \RuntimeException('This HTTP driver has no session hook, so actor session data cannot be applied. Build the driver through RunsJourneys::journeyHttpDriver().');
+        }
+
+        ($this->session)($session);
     }
 
     /**

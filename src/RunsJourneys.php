@@ -57,6 +57,9 @@ trait RunsJourneys
                 'DELETE' => $this->delete($uri, $data, $headers),
                 default => throw new InvalidArgumentException(sprintf('Unsupported HTTP method "%s".', $method)),
             },
+            session: function (array $data): void {
+                $this->withSession($data);
+            },
         );
     }
 

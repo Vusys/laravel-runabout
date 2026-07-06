@@ -225,6 +225,31 @@ Step::make('cast vote')
 
 Every request made through `$ctx->as('name')` is authenticated as that actor's user, so a journey can hop freely between participants. Actors proxy the full set of test HTTP verbs (`get`, `getJson`, `post`, `postJson`, `put`, `putJson`, `patch`, `patchJson`, `delete`, `deleteJson`), and `$ctx->lastResponse()` holds the most recent `TestResponse`.
 
+When the participants are fixed for the whole run, declare them once with `actors()` instead of a sign-up step — Runabout registers them on every trail's context for you (actors live on the per-trail context, so they otherwise have to be re-registered each trail):
+
+```php
+final class ReviewJourney extends Journey
+{
+    public function __construct(private User $manager, private User $agent) {}
+
+    public function actors(): array
+    {
+        return ['manager' => $this->manager, 'agent' => $this->agent];
+    }
+
+    // steps() can call $ctx->as('manager') / $ctx->as('agent') straight away.
+}
+```
+
+The users must exist before the run (create them in the test and pass them in); anything created inside a trail is rolled back before the next one, so register those with `$ctx->actingAs()` in a step as the voters above do.
+
+If your app carries tenancy (or anything else) in the session, attach it to the actor and it rides along with every request that actor makes — driving the full middleware stack, no per-request session juggling:
+
+```php
+$ctx->actingAs($user, 'agent', ['current-tenant-id' => $tenant->id]);   // persists for all of this actor's requests
+$ctx->as('agent')->withSession(['impersonating' => 42])->postJson(...);  // layered on for one request
+```
+
 ### Time travel
 
 ```php
@@ -335,13 +360,26 @@ Declaring it once on the journey closes a subtle hole: a per-act helper that som
 
 ## Database reset between trails
 
-Each trail runs against fresh state. The default wraps every trail in a transaction on the default connection and rolls it back. When the code under test commits or manages transactions itself, opt into truncation; for anything else (multiple connections, external stores), supply your own wrapper:
+Each trail runs against fresh state. The default wraps every trail in a transaction on the default connection and rolls it back. When the code under test commits or manages transactions itself, opt into truncation:
 
 ```php
 $this->journey(PostLifecycleJourney::class)
     ->resetByTruncating('votes', 'posts', 'communities', 'users')
     ->run();
+```
 
+When a journey writes across more than one store, `resetConnections()` rolls back a transaction on each named connection, and `resetExternal()` runs a cleanup for anything a transaction can't undo (a Mongo or Elasticsearch wipe, a cache flush). The two compose — and `resetExternal()` on its own still transacts the default connection:
+
+```php
+$this->journey(AnalyticsJourney::class)
+    ->resetConnections('mysql', 'analytics')          // roll back both SQL connections
+    ->resetExternal(fn () => $this->wipeMongoContacts()) // then clean the document store
+    ->run();
+```
+
+For anything more bespoke, supply the whole wrapper yourself:
+
+```php
 $this->journey(PostLifecycleJourney::class)
     ->resetWith(function (Closure $trail): void {
         // begin, run, restore — whatever your app needs
@@ -351,6 +389,8 @@ $this->journey(PostLifecycleJourney::class)
 ```
 
 You can also override `wrapTrail()` on your test case to change the default for every journey it runs.
+
+Whatever the reset, a store the trail seeds must be seeded *inside a step*, not once in `setUp()`: the reset runs after every trail, so state established before the run is gone after the first one. (A step that re-creates it when absent is the usual shape.)
 
 ## Watching the trails
 

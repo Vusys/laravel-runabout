@@ -192,9 +192,14 @@ final class Context
 
     /**
      * Register a named actor for the rest of the trail. Requests made through
-     * the returned Actor are authenticated as this user.
+     * the returned Actor are authenticated as this user; any $session data is
+     * applied to every request the actor makes (for apps that carry tenancy or
+     * other state in the session), and can be extended per request with
+     * Actor::withSession().
+     *
+     * @param  array<string, mixed>  $session
      */
-    public function actingAs(Authenticatable $user, string $name): Actor
+    public function actingAs(Authenticatable $user, string $name, array $session = []): Actor
     {
         if (! $this->http instanceof HttpDriver) {
             throw new RuntimeException(
@@ -202,7 +207,7 @@ final class Context
             );
         }
 
-        return $this->actors[$name] = new Actor($name, $user, $this->http, $this);
+        return $this->actors[$name] = new Actor($name, $user, $this->http, $this, $session);
     }
 
     /** Retrieve a previously registered actor: $ctx->as('manager')->postJson(...). */

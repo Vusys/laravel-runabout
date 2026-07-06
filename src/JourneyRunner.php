@@ -95,6 +95,10 @@ final class JourneyRunner
         $instances = [];
 
         foreach ($journeys as $i => $journey) {
+            $context = new Context($randomizer, $http, $deferred);
+
+            $this->registerActors($journey, $context);
+
             $instances[] = new JourneyInstance(
                 journey: $journey,
                 label: $labelled ? chr(65 + $i) : null,
@@ -103,7 +107,7 @@ final class JourneyRunner
                 // tracks observations across steps) lives exactly as long as
                 // the trail.
                 invariants: $journey->invariants(),
-                context: new Context($randomizer, $http, $deferred),
+                context: $context,
             );
         }
 
@@ -329,6 +333,18 @@ final class JourneyRunner
         }
 
         return $enabled;
+    }
+
+    /**
+     * Register the journey's declared actors on the trail's context, so a step
+     * can reach them with $ctx->as(...) without a setup step. The name and user
+     * types are enforced by Context::actingAs().
+     */
+    private function registerActors(Journey $journey, Context $context): void
+    {
+        foreach ($journey->actors() as $name => $user) {
+            $context->actingAs($user, $name);
+        }
     }
 
     /** @return list<Step> */

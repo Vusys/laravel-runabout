@@ -27,6 +27,12 @@ final class PendingJourney
     /** @var list<Closure(Trail): void> */
     private array $onTrail = [];
 
+    /** @var list<string|null>|null Connections to wrap in a rolled-back transaction; null until resetConnections() is called. */
+    private ?array $transactedConnections = null;
+
+    /** @var list<Closure(): void> Cleanups run after each trail, for non-transactional external stores. */
+    private array $externalResets = [];
+
     /** @var non-empty-list<Journey> */
     private readonly array $journeys;
 
@@ -140,6 +146,69 @@ final class PendingJourney
                 }
             }
         });
+    }
+
+    /**
+     * Reset by rolling back a transaction on each of several connections,
+     * instead of the single default connection — the multi-connection
+     * equivalent of the default reset, for journeys that write across more than
+     * one database. Composes with resetExternal(). Pass no arguments to transact
+     * just the default connection.
+     */
+    public function resetConnections(string ...$connections): self
+    {
+        $this->transactedConnections = $connections === [] ? [null] : array_values($connections);
+
+        return $this->rebuildTrailReset();
+    }
+
+    /**
+     * Register a cleanup to run after each trail, once the transacted
+     * connections have rolled back — for non-transactional stores (a Mongo or
+     * Elasticsearch wipe, a cache flush) that a transaction rollback cannot
+     * undo. May be called more than once; cleanups run in the order registered.
+     * Composes with resetConnections() (which defaults to the single default
+     * connection when resetExternal() is used alone).
+     *
+     * @param  Closure(): void  $cleanup
+     */
+    public function resetExternal(Closure $cleanup): self
+    {
+        $this->externalResets[] = $cleanup;
+
+        return $this->rebuildTrailReset();
+    }
+
+    /**
+     * Build the trail wrapper for resetConnections()/resetExternal(): begin a
+     * transaction on each connection, run the trail, then in a finally roll
+     * each back (in reverse) and run every external cleanup. Rebuilt whenever
+     * either method is called so the two compose regardless of call order.
+     */
+    private function rebuildTrailReset(): self
+    {
+        $connections = $this->transactedConnections ?? [null];
+        $externalResets = $this->externalResets;
+
+        $this->wrapper = function (Closure $trail) use ($connections, $externalResets): void {
+            foreach ($connections as $name) {
+                DB::connection($name)->beginTransaction();
+            }
+
+            try {
+                $trail();
+            } finally {
+                foreach (array_reverse($connections) as $name) {
+                    DB::connection($name)->rollBack();
+                }
+
+                foreach ($externalResets as $cleanup) {
+                    $cleanup();
+                }
+            }
+        };
+
+        return $this;
     }
 
     public function run(): void

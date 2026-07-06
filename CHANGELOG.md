@@ -6,6 +6,9 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ### Added
 
+- `Journey::actors()`: declare named actors (name => user) once on the journey and Runabout registers them on every trail's context, so HTTP steps can call `$ctx->as('manager')->postJson(...)` without a setup step (actors live on the per-trail context, so they otherwise have to be re-registered each trail). The users must exist before the run; anything created inside a trail is rolled back, so register those with `$ctx->actingAs()` in a step as before.
+- Per-actor session: `$ctx->actingAs($user, 'agent', ['tenant' => 5])` attaches session data that rides along with every request the actor makes, and `Actor::withSession([...])` layers more on for a single request — so journeys can drive apps whose tenancy (or other state) lives in the session, through the full middleware stack, without a per-request session dance.
+- `PendingJourney::resetConnections(...$connections)` and `resetExternal(Closure $cleanup)`: reset across more than one store between trails — roll back a transaction on each named connection (the multi-connection form of the default reset) and/or run a cleanup for non-transactional stores (a Mongo/Elasticsearch wipe, a cache flush). The two compose; `resetExternal()` alone still transacts the default connection.
 - Journey/Step/Context/Invariant core: define a journey's steps as actions plus assertions, and run them in seeded, randomized-but-deterministic orders with invariants checked after every step.
 - Precondition-based ordering engine with `after()` sugar, `when()` preconditions, `repeatable()` steps, and clear deadlock/runaway failures.
 - `Step::assertWhen($condition, $then, $otherwise = null)`: a conditional assertion in the spirit of Laravel's `when()` — when the condition holds `$then` must pass, otherwise `$otherwise` must pass (or the step claims nothing when it's omitted).
