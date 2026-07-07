@@ -11,7 +11,7 @@ name: Bencher
 # thresholds.
 #
 # Auth: requires BENCHER_API_KEY repo secret (set during signup at
-# https://bencher.dev). Project slug is `vusys-laravel-runabout`.
+# https://bencher.dev). Project slug is `laravel-runabout`.
 
 on:
   push:
@@ -91,7 +91,7 @@ jobs:
           BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
         run: |
           bencher run \
-            --project vusys-laravel-runabout \
+            --project laravel-runabout \
             --branch master \
             --testbed ubuntu-latest \
             --adapter json \
@@ -111,7 +111,7 @@ jobs:
           # any prior commits on a re-run so the comparison is
           # always head-vs-master rather than head-vs-previous-PR-push.
           bencher run \
-            --project vusys-laravel-runabout \
+            --project laravel-runabout \
             --branch "$GITHUB_HEAD_REF" \
             --start-point "$GITHUB_BASE_REF" \
             --start-point-hash '${{ github.event.pull_request.base.sha }}' \
