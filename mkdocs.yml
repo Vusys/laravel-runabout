@@ -1,4 +1,4 @@
-site_name: Runabout
+site_name: Laravel Runabout
 site_description: Journey testing for Laravel — run the steps of a user journey in seeded, shuffled orders and assert invariants along the way.
 site_url: https://vusys.github.io/laravel-runabout/
 repo_url: https://github.com/Vusys/laravel-runabout
