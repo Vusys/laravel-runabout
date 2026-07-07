@@ -24,6 +24,9 @@ jobs:
           - { laravel: '11.0', testbench: '9.0' }
           - { laravel: '12.0', testbench: '10.0' }
           - { laravel: '13.0', testbench: '11.0' }
+          # One cell computes coverage and uploads to Codecov. A single
+          # cell is enough here — there is no DB axis to merge across.
+          - { laravel: '13.0', php: '8.4', coverage: true }
 
     name: "PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}"
 
@@ -35,7 +38,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, pdo_sqlite
-          coverage: none
+          coverage: ${{ matrix.coverage && 'pcov' || 'none' }}
           tools: composer:v2
 
       # setup-php's internal handoff of GITHUB_TOKEN to Composer's auth.json
@@ -79,7 +82,15 @@ jobs:
         run: composer update --prefer-dist --no-interaction --no-progress
 
       - name: Run tests
-        run: vendor/bin/phpunit
+        run: vendor/bin/phpunit ${{ matrix.coverage && '--coverage-clover=coverage.xml' || '' }}
+
+      - name: Upload coverage to Codecov
+        if: matrix.coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   static-analysis:
     runs-on: ubuntu-latest

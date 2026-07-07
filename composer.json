@@ -10,6 +10,7 @@
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.0",
+        "infection/infection": "^0.33 || ^0.34",
         "larastan/larastan": "^2.9|^3.0",
         "laravel/pint": "^1.0",
         "orchestra/testbench": "^9.0|^10.0",
@@ -27,7 +28,10 @@
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "infection/extension-installer": true
+        }
     },
     "scripts": {
         "analyse": "phpstan analyse",
@@ -41,9 +45,11 @@
             "@rector:check",
             "@analyse"
         ],
-        "test": "phpunit"
+        "test": "phpunit",
+        "infection": "infection --threads=max"
     },
     "scripts-descriptions": {
-        "check": "Run every non-test gate (Pint --test, Rector --dry-run, PHPStan level 9) in one go. Halts on the first failure. Matches what CI's static-analysis job runs — pass this locally before pushing."
+        "check": "Run every non-test gate (Pint --test, Rector --dry-run, PHPStan level 9) in one go. Halts on the first failure. Matches what CI's static-analysis job runs — pass this locally before pushing.",
+        "infection": "Run mutation testing over src/ with Infection. Reports the Mutation Score Indicator (MSI); CI publishes the master-branch MSI to the Stryker dashboard badge."
     }
 }

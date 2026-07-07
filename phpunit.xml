@@ -5,10 +5,15 @@
          colors="true"
          failOnRisky="true"
          failOnWarning="true"
+         defaultTestSuite="Package"
          cacheDirectory=".phpunit.cache">
     <testsuites>
         <testsuite name="Package">
             <directory>tests</directory>
+            <exclude>tests/Performance</exclude>
+        </testsuite>
+        <testsuite name="Performance">
+            <directory>tests/Performance</directory>
         </testsuite>
     </testsuites>
     <source>
