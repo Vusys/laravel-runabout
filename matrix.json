@@ -1,0 +1,7 @@
+{
+    "schemaVersion": 1,
+    "label": "CI matrix",
+    "message": "6 configurations",
+    "color": "success",
+    "cacheSeconds": 3600
+}
