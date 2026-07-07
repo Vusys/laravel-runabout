@@ -82,6 +82,66 @@ final class TrailCoverageTest extends TestCase
         $this->assertSame('  (no trails recorded)', (new TrailCoverage)->describe());
     }
 
+    public function test_mode_counts_accumulate_across_trails_of_the_same_mode(): void
+    {
+        $coverage = new TrailCoverage;
+
+        $coverage->record($this->trail('shuffled', ['a']));
+        $coverage->record($this->trail('shuffled', ['a', 'b']));
+
+        // A broken accumulator would reset the mode count to 1 on every trail.
+        $this->assertStringContainsString('(2 shuffled)', $coverage->describe());
+    }
+
+    public function test_describe_pads_step_names_to_the_widest_name_not_the_widest_count(): void
+    {
+        $coverage = new TrailCoverage;
+
+        // "x" runs 10 times (a 2-digit count) but is 1 character long;
+        // "longname" runs once (a 1-digit count) but is 8 characters long.
+        // The padding width must come from the step-name lengths, not the counts.
+        $coverage->record($this->trail('canonical', [...array_fill(0, 10, 'x'), 'longname']));
+
+        $described = $coverage->describe();
+
+        $this->assertStringContainsString(str_pad('x', strlen('longname')).'  10 runs in 1/1 trails', $described);
+        $this->assertStringContainsString(str_pad('longname', strlen('longname')).'  1 runs in 1/1 trails', $described);
+    }
+
+    public function test_describe_lists_every_unseen_pair_when_exactly_ten_and_omits_the_more_suffix(): void
+    {
+        $coverage = new TrailCoverage;
+
+        // 5 distinct steps recorded once in a fixed canonical order produce
+        // exactly n*(n-1)/2 = 10 unseen (reverse) pairs out of 20 possible.
+        $coverage->record($this->trail('canonical', ['a', 'b', 'c', 'd', 'e']));
+
+        $described = $coverage->describe();
+
+        $this->assertStringContainsString('Orderings of step pairs never observed (10 of 20):', $described);
+        $this->assertSame(10, substr_count($described, ' before '));
+        // The 10th (last) pair must be present — a slice starting at -1 or of length 9 would drop it.
+        $this->assertStringContainsString('"e" before "d"', $described);
+        // Exactly 10 is not > 10, so no truncation suffix should appear.
+        $this->assertStringNotContainsString('... and', $described);
+    }
+
+    public function test_describe_truncates_unseen_pairs_after_ten_and_reports_the_remainder(): void
+    {
+        $coverage = new TrailCoverage;
+
+        // 6 distinct steps recorded once in a fixed canonical order produce
+        // n*(n-1)/2 = 15 unseen (reverse) pairs out of 30 possible.
+        $coverage->record($this->trail('canonical', ['a', 'b', 'c', 'd', 'e', 'f']));
+
+        $described = $coverage->describe();
+
+        $this->assertStringContainsString('Orderings of step pairs never observed (15 of 30):', $described);
+        // Exactly 10 individual lines — not 9, not 11, not all 15.
+        $this->assertSame(10, substr_count($described, ' before '));
+        $this->assertStringContainsString('... and 5 more', $described);
+    }
+
     public function test_a_real_run_never_explores_a_constrained_ordering(): void
     {
         $coverage = new TrailCoverage;
