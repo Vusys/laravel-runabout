@@ -44,12 +44,14 @@ final class PendingJourneyCoverageStderrFilter extends \php_user_filter
     public function filter($in, $out, &$consumed, $closing): int
     {
         while ($bucket = stream_bucket_make_writeable($in)) {
+            // Measure the consumed byte count as the growth of $buffer — a
+            // declared string, so strlen() needs no cast — rather than
+            // $bucket->data/->datalen, whose reflected types vary by PHP
+            // version and set Rector (strips a redundant cast on 8.4) and
+            // Larastan (needs one on 8.3) against each other.
+            $before = strlen(self::$buffer);
             self::$buffer .= $bucket->data;
-            // strlen() (always int) rather than ->datalen: the latter's
-            // reflected type varies by PHP version, tripping the by-ref
-            // int contract on 8.3 while a cast gets stripped as redundant
-            // on 8.4.
-            $consumed += strlen($bucket->data);
+            $consumed += strlen(self::$buffer) - $before;
         }
 
         return PSFS_PASS_ON;
