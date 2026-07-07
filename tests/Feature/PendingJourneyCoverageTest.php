@@ -45,7 +45,11 @@ final class PendingJourneyCoverageStderrFilter extends \php_user_filter
     {
         while ($bucket = stream_bucket_make_writeable($in)) {
             self::$buffer .= $bucket->data;
-            $consumed += $bucket->datalen;
+            // strlen() (always int) rather than ->datalen: the latter's
+            // reflected type varies by PHP version, tripping the by-ref
+            // int contract on 8.3 while a cast gets stripped as redundant
+            // on 8.4.
+            $consumed += strlen($bucket->data);
         }
 
         return PSFS_PASS_ON;
