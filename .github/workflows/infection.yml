@@ -1,0 +1,155 @@
+name: Infection
+
+# Mutation testing — two modes:
+#
+# `pr` (PRs): runs in --git-diff-lines so only mutations in changed
+# code are evaluated. Fast enough to gate PRs; doesn't produce a
+# project-wide MSI, so doesn't publish to the dashboard.
+#
+# `full` (master push + weekly + manual): a single un-sharded run over
+# all of src/ on SQLite. Infection's built-in Stryker logger publishes
+# the resulting MSI to the Stryker dashboard (feeds the README badge),
+# gated to the `master` branch by infection.json5's `logs.stryker.report`.
+#
+# runabout's src/ is flat and sqlite-only, so there's no DB matrix and
+# no subtree sharding — a single run covers the whole package.
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a branch supersedes any in-flight mutation run on it.
+concurrency:
+  group: infection-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr:
+    name: Mutation testing (PR diff)
+    # Skip github-actions Dependabot bumps — no PHP changed, so the
+    # diff-mode mutation run has nothing to mutate.
+    if: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'dependabot/github_actions/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # Infection's --git-diff-base needs the base branch fetched.
+          fetch-depth: 0
+          # The diff-mode run posts PR comments via --logger-github;
+          # don't leave the default GITHUB_TOKEN persisted in .git/config.
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          # pcov is dramatically faster than xdebug for coverage and
+          # Infection only needs line coverage, not full debug info.
+          coverage: pcov
+          tools: composer:v2
+          # Cap PHP at 2GB so a runaway mutant (unbounded recursion/loop)
+          # fails cleanly via OutOfMemoryError instead of taking down the
+          # runner — Infection records it as killed-by-error (correct).
+          ini-values: memory_limit=2G
+
+      - name: Configure Composer authentication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: composer config --global --auth github-oauth.github.com "$GH_TOKEN"
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-infection-${{ hashFiles('composer.json') }}
+          restore-keys: composer-infection-
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Run Infection (diff mode)
+        env:
+          DB_CONNECTION: sqlite
+        run: |
+          vendor/bin/infection \
+            --git-diff-lines \
+            --git-diff-base="origin/${{ github.base_ref }}" \
+            --logger-github \
+            --no-progress \
+            --no-interaction \
+            --threads="$(nproc)"
+
+  full:
+    name: Mutation testing (full)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: pcov
+          tools: composer:v2
+          # See `pr` job — cap PHP at 2GB so a runaway mutant fails
+          # cleanly via OOM instead of taking down the runner.
+          ini-values: memory_limit=2G
+
+      - name: Configure Composer authentication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: composer config --global --auth github-oauth.github.com "$GH_TOKEN"
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-infection-${{ hashFiles('composer.json') }}
+          restore-keys: composer-infection-
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      # On master, Infection's built-in Stryker logger publishes the MSI
+      # to the dashboard (gated to `master` by infection.json5). It reads
+      # STRYKER_DASHBOARD_API_KEY from the environment; if the secret is
+      # unset the upload is skipped and the run still succeeds.
+      - name: Run Infection (full)
+        env:
+          DB_CONNECTION: sqlite
+          STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
+        run: |
+          vendor/bin/infection \
+            --logger-github \
+            --no-progress \
+            --no-interaction \
+            --threads="$(nproc)"
+
+      - name: Upload Infection report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: infection-report-${{ github.run_id }}
+          path: build/infection/
+          if-no-files-found: warn
+          retention-days: 14
