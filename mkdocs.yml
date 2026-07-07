@@ -1,0 +1,95 @@
+site_name: Runabout
+site_description: Journey testing for Laravel — run the steps of a user journey in seeded, shuffled orders and assert invariants along the way.
+site_url: https://vusys.github.io/laravel-runabout/
+repo_url: https://github.com/Vusys/laravel-runabout
+repo_name: Vusys/laravel-runabout
+edit_uri: edit/master/docs/
+
+docs_dir: docs
+
+validation:
+  nav:
+    omitted_files: info
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Fira Sans
+    code: Fira Code
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      extend_pygments_lang:
+        - name: php
+          lang: php
+          options:
+            startinline: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - stylesheets/codehilite.css
+
+nav:
+  - Home: index.md
+  - Introduction: introduction.md
+  - Installation: installation.md
+  - Quick start: quick-start.md
+  - Core concepts: concepts.md
+  - Defining steps: steps.md
+  - The context: context.md
+  - Actors & HTTP: actors-http.md
+  - Time travel: time-travel.md
+  - Invariants: invariants.md
+  - Execution modes: execution-modes.md
+  - Interleaving journeys: interleaving.md
+  - Resetting state: database-resets.md
+  - Reproducing failures: reproducing-failures.md
+  - Trails & coverage: observability.md
+  - Environment variables: environment.md

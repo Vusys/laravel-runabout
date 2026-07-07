@@ -2,4 +2,5 @@
 /composer.lock
 /.phpunit.cache/
 /build/
+/site/
 .DS_Store
