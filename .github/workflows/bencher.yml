@@ -84,6 +84,9 @@ jobs:
 
       - name: Upload baseline (master)
         if: github.event_name == 'push'
+        # Perf tracking is informational — a Bencher hiccup (project not
+        # yet created, dashboard down) must never red the build.
+        continue-on-error: true
         env:
           BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
         run: |
@@ -96,6 +99,9 @@ jobs:
 
       - name: Compare against baseline (PR)
         if: github.event_name == 'pull_request'
+        # Informational — see the baseline step. A regression posts a PR
+        # comment via --github-actions; it should not fail the check.
+        continue-on-error: true
         env:
           BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
