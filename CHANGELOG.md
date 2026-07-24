@@ -4,6 +4,8 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-24
+
 ### Changed
 
 - `Invariants::legalTransitions()`: the "not a legal initial state" error now points at the fix for the common cause — a row that exists before the journey and is transitioned by the first step, so the invariant never observes its true initial state. Record it in a leading step.
