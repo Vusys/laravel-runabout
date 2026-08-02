@@ -4,28 +4,55 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - composer
     groups:
-      composer-dependencies:
+      dev-dependencies:
+        dependency-type: development
         update-types:
           - minor
           - patch
-
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      github-actions:
+      production-minor-patch:
+        dependency-type: production
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "illuminate/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "orchestra/testbench"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: pip
     directory: /docs
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    labels:
+      - dependencies
+      - python
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    labels:
+      - dependencies
+      - github-actions
     groups:
-      docs-dependencies:
+      actions:
         update-types:
           - minor
           - patch
