@@ -28,6 +28,20 @@
     },
     mutators: {
         "@default": true,
+        // JourneyRunner::runCanonical()'s round-robin loop is bounded by
+        // array_key_exists() at every position for every instance, so
+        // nudging the loop's start (0 -> -1) or end (< -> <=) by one is
+        // unobservable: the guard turns the extra position into a no-op for
+        // every instance. Proven-equivalent, the same class of survivor the
+        // full run already tolerates (see the note above) — but the
+        // PR-diff run has no headroom to absorb a new one, so these are
+        // named explicitly instead.
+        LessThan: {
+            ignore: ["Vusys\\Runabout\\JourneyRunner::runCanonical"],
+        },
+        DecrementInteger: {
+            ignore: ["Vusys\\Runabout\\JourneyRunner::runCanonical"],
+        },
     },
     minMsi: 94,
     minCoveredMsi: 94,

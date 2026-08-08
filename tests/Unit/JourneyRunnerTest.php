@@ -116,6 +116,20 @@ final class JourneyRunnerTest extends TestCase
         $this->assertSame(['A: a1', 'B: b1', 'A: a2', 'A: a3'], $trail->steps());
     }
 
+    public function test_a_shorter_instance_dropping_out_does_not_stall_the_ones_after_it(): void
+    {
+        // The shorter instance (A) is listed *before* the longer one (B), so
+        // A running out of steps must not stop the round from reaching B at
+        // the same position — dropping this instance has to move on to the
+        // next one, not abandon the rest of the round.
+        $a = $this->journey([Step::make('a1')]);
+        $b = $this->journey([Step::make('b1'), Step::make('b2'), Step::make('b3')]);
+
+        $trail = (new JourneyRunner)->runInterleaved([$a, $b], seed: 1, shuffle: false);
+
+        $this->assertSame(['A: a1', 'B: b1', 'B: b2', 'B: b3'], $trail->steps());
+    }
+
     public function test_an_unsatisfiable_precondition_is_reported_as_a_deadlock(): void
     {
         $journey = $this->journey([
