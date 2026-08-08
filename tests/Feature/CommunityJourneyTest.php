@@ -58,9 +58,10 @@ final class CommunityJourneyTest extends TestCase
                 ->run();
             $this->fail('Expected an interleaved trail to catch the tenant bleed.');
         } catch (JourneyFailedException $e) {
-            // Even the canonical interleaved baseline (A's journey in full,
-            // then B's) exposes this bleed: B's first unscoped count already
-            // includes A's posts.
+            // Even the canonical interleaved baseline (round robin: A's step,
+            // then B's step, position by position) exposes this bleed: B's
+            // draft post recomputes the unscoped count after A has already
+            // drafted one, so B's cached count already includes A's post.
             $this->assertMatchesRegularExpression('/Invariant "[AB]: Community\.posts_count matches its source data"/', $e->getMessage());
             $this->assertMatchesRegularExpression('/after step "[AB]: draft post"/', $e->getMessage());
         }

@@ -39,8 +39,8 @@ Omit the third closure and the step claims nothing when the condition is false. 
 ## Constraints: when a step is eligible
 
 - **`after('a', 'b')`** — sugar precondition: the step is eligible only once each named step has run at least once. This is the usual way to express "you can't publish before you draft."
-- **`when(fn (Context $ctx) => bool)`** — a raw precondition: eligible only while the closure returns true, evaluated fresh each tick against current state.
-- **`repeatable(?int $max = null, int $min = 1)`** — the step may run again after completing. `max` null (or omitted) means unbounded; `min > 1` drives a bounded random walk that guarantees the step runs at least `min` times.
+- **`when(fn (Context $ctx) => bool)`** — a raw precondition: eligible only while the closure returns true, evaluated fresh each tick against current state. A step with no `after()` has its `when()` evaluated before any step has run, so the closure must tolerate a world that does not exist yet; adding an `after()` prerequisite is what makes a condition safe to evaluate late, via `isEnabled()`'s short-circuit.
+- **`repeatable(?int $max = null, int $min = 1)`** — the step may run again after completing. `max` null (or omitted) means unbounded; `min > 1` drives a bounded random walk that guarantees the step runs at least `min` times. Pairing a `min` above 1 with a `when()` precondition that can become permanently false is a trail that can never finish — the runaway detector catches it, but the fix is to loosen the precondition or lower `min`, not to bound the trail further.
 - **`weight(int $weight)`** — relative pick weight (default 1, must be `>= 1`). A weight-3 step is picked three times as often as a weight-1 step when both are eligible.
 
 The shuffled runner picks randomly among *currently eligible* steps until every step has run at least once. A journey whose constraints can strand it (no step eligible but some never ran) fails loudly as a **deadlock**, naming the steps that never ran; a journey that repeats forever is cut off as a **runaway**.
