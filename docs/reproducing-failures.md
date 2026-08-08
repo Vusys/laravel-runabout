@@ -64,4 +64,4 @@ For a long artifact, read it from a file with `RUNABOUT_TRAIL=@path.json`. In co
 
 This works because each execution's random draws depend only on which execution it is, not on what ran before it (value shrinking pins the minimised draws in the artifact's optional fourth element). That position-independence is also what lets shrinking be sound: removing a step never shifts the survivors' draws.
 
-See [Environment variables](environment.md) for the full list of `RUNABOUT_*` knobs.
+See [Environment variables](environment.md) for the full list of `RUNABOUT_*` settings.
