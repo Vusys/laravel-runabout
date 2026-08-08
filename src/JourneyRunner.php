@@ -217,15 +217,32 @@ final class JourneyRunner
     }
 
     /**
+     * Round robin across instances by declared position — A's first step,
+     * B's first step, A's second, and so on — rather than concatenating each
+     * instance's whole journey in turn. Each instance's declared order stays
+     * intact, but the canonical trail is now an actual interleaving, so a
+     * cross-instance condition that only needs the other side to have
+     * started (rather than finished) can be enabled here instead of being
+     * fatal on every trail. An instance with fewer steps just drops out of
+     * later rounds; it does not stall the others.
+     *
      * @param  non-empty-list<JourneyInstance>  $instances
      */
     private function runCanonical(array $instances, Trail $trail, int $seed): void
     {
-        foreach ($instances as $instance) {
-            foreach ($instance->steps as $step) {
+        $depth = max(array_map(fn (JourneyInstance $instance): int => count($instance->steps), $instances));
+
+        for ($position = 0; $position < $depth; $position++) {
+            foreach ($instances as $instance) {
+                if (! array_key_exists($position, $instance->steps)) {
+                    continue;
+                }
+
+                $step = $instance->steps[$position];
+
                 if (! $step->isEnabled($instance->context)) {
                     throw new InvalidJourneyException(sprintf(
-                        'Step "%s" is not enabled when reached in declared order; the canonical order must be a valid trail. Check its when()/after() constraints.',
+                        'Step "%s" is not enabled when reached in declared order (round robin across instances); the canonical order must be a valid trail. Check its when()/after() constraints.',
                         $step->name(),
                     ));
                 }

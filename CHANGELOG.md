@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Fixed
+
+- Interleaved canonical order: `runCanonical` ran each instance's whole journey before starting the next, so the canonical trail never interleaved and a step gated on another instance's state (`only read B's records if B has any`) could never be enabled — the run failed immediately with a message that sent you to check `when()`/`after()` constraints that were correct. The canonical order now runs round robin across instances by declared position (A's first step, B's first step, A's second, and so on), keeping each instance's own order intact while making the canonical trail an actual interleaving.
+
 ## [0.1.0] - 2026-07-24
 
 ### Changed

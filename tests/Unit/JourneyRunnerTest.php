@@ -67,6 +67,69 @@ final class JourneyRunnerTest extends TestCase
         $this->assertSame(['a', 'b', 'c', 'd'], $trail->steps());
     }
 
+    public function test_interleaved_canonical_mode_round_robins_across_instances_instead_of_concatenating(): void
+    {
+        $a = $this->journey([Step::make('a1'), Step::make('a2')]);
+        $b = $this->journey([Step::make('b1'), Step::make('b2')]);
+
+        $trail = (new JourneyRunner)->runInterleaved([$a, $b], seed: 1, shuffle: false);
+
+        // A's first step, B's first step, A's second, B's second — not A's
+        // whole journey followed by B's.
+        $this->assertSame(['A: a1', 'B: b1', 'A: a2', 'B: b2'], $trail->steps());
+    }
+
+    public function test_interleaved_canonical_mode_enables_a_step_gated_on_another_instances_progress(): void
+    {
+        // A cross-instance guard, in the spirit of the bug report: "only try
+        // to read B's records if B has started." Concatenating A's whole
+        // journey before B's could never enable this on the canonical
+        // trail — B never starts until A has already finished.
+        $bHasStarted = false;
+
+        $a = $this->journey([
+            Step::make('a1'),
+            Step::make('reach across')
+                ->after('a1')
+                ->when(function () use (&$bHasStarted): bool {
+                    return $bHasStarted;
+                }),
+        ]);
+        $b = $this->journey([
+            Step::make('b1')->act(function () use (&$bHasStarted): void {
+                $bHasStarted = true;
+            }),
+        ]);
+
+        $trail = (new JourneyRunner)->runInterleaved([$a, $b], seed: 1, shuffle: false);
+
+        $this->assertSame(['A: a1', 'B: b1', 'A: reach across'], $trail->steps());
+    }
+
+    public function test_interleaved_canonical_mode_lets_a_shorter_instance_drop_out_of_later_rounds(): void
+    {
+        $a = $this->journey([Step::make('a1'), Step::make('a2'), Step::make('a3')]);
+        $b = $this->journey([Step::make('b1')]);
+
+        $trail = (new JourneyRunner)->runInterleaved([$a, $b], seed: 1, shuffle: false);
+
+        $this->assertSame(['A: a1', 'B: b1', 'A: a2', 'A: a3'], $trail->steps());
+    }
+
+    public function test_a_shorter_instance_dropping_out_does_not_stall_the_ones_after_it(): void
+    {
+        // The shorter instance (A) is listed *before* the longer one (B), so
+        // A running out of steps must not stop the round from reaching B at
+        // the same position — dropping this instance has to move on to the
+        // next one, not abandon the rest of the round.
+        $a = $this->journey([Step::make('a1')]);
+        $b = $this->journey([Step::make('b1'), Step::make('b2'), Step::make('b3')]);
+
+        $trail = (new JourneyRunner)->runInterleaved([$a, $b], seed: 1, shuffle: false);
+
+        $this->assertSame(['A: a1', 'B: b1', 'B: b2', 'B: b3'], $trail->steps());
+    }
+
     public function test_an_unsatisfiable_precondition_is_reported_as_a_deadlock(): void
     {
         $journey = $this->journey([
