@@ -1,6 +1,6 @@
 # Runabout
 
-Journey testing for Laravel: define the steps of a user journey once, and Runabout executes them in randomized-but-deterministic orders, checking your invariants after every step. It exists to catch the bugs that unit, feature, and browser tests all miss — the ones that only appear when real users do things in an order you never thought to test.
+Journey testing for Laravel: define the steps of a user journey once, and Runabout executes them in randomised-but-deterministic orders, checking your invariants after every step. It exists to catch the bugs that unit, feature, and browser tests all miss — the ones that only appear when real users do things in an order you never thought to test.
 
 ```php
 final class PostLifecycleTest extends TestCase
