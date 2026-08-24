@@ -34,8 +34,8 @@ One journey definition becomes twenty-six executions: the declared order, then t
 | Building journeys | [Defining steps](steps.md), [The context](context.md), [Invariants](invariants.md) |
 | Driving the app | [Actors & HTTP](actors-http.md), [Time travel](time-travel.md) |
 | Running journeys | [Execution modes](execution-modes.md), [Interleaving journeys](interleaving.md), [Resetting state](database-resets.md) |
-| Diagnosing runs | [Reproducing failures](reproducing-failures.md), [Trails & coverage](observability.md) |
-| Reference | [Environment variables](environment.md) |
+| Diagnosing runs | [Reproducing failures](reproducing-failures.md), [Trails & coverage](observability.md), [Troubleshooting](troubleshooting.md) |
+| Reference | [API reference](api-reference.md), [Environment variables](environment.md), [Changelog](changelog.md) |
 
 ## Requirements
 

@@ -70,7 +70,12 @@ markdown_extensions:
           options:
             startinline: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  # base_path reaches the repo root so docs/changelog.md can include CHANGELOG.md;
+  # check_paths makes a missing include a build error rather than a silent gap.
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
@@ -101,5 +106,8 @@ nav:
   - Diagnosing runs:
       - Reproducing failures: reproducing-failures.md
       - Trails & coverage: observability.md
+      - Troubleshooting: troubleshooting.md
   - Reference:
+      - API reference: api-reference.md
       - Environment variables: environment.md
+      - Changelog: changelog.md

@@ -47,9 +47,11 @@ The quota `$column` must equal the starting allowance minus actual spend. `$star
 
 A **stateful** invariant: it tracks each row's `$column` across the trail and objects the moment a row jumps between states no declared edge connects. `$transitions` maps each state to the states it may move to; `initial` lists the legal starting states. Handles plain strings and `BackedEnum` values. Pass `stateOf` to derive the state from something other than a raw column.
 
-### `trashedLeavesNoLiveChildren($model, $liveChildren, $description = 'children', $deletedAtColumn = 'deleted_at')`
+### `trashedLeavesNoLiveChildren($model, $liveChildren, $childrenDescription = 'children', $deletedAtColumn = 'deleted_at')`
 
 A soft-deleted parent must keep no live children. `$liveChildren` returns the count of children that are still live for a given parent. Catches soft-delete leaks where trashing a parent orphans rows that should have gone with it.
+
+`$childrenDescription` only names the children in the invariant's description and failure message (`trashed Post rows keep no live votes`), and `$deletedAtColumn` is there for models whose soft-delete column isn't `deleted_at`. The query deliberately drops global scopes so it can see the trashed rows in the first place.
 
 ### `uniqueBy($model, $columns)`
 
