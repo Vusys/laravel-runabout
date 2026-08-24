@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Randomness;
 
 /**
  * One recorded bounded-integer draw: the value an execution pulled and the

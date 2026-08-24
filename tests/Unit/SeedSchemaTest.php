@@ -7,10 +7,10 @@ namespace Vusys\Runabout\Tests\Unit;
 use ArrayObject;
 use PHPUnit\Framework\TestCase;
 use Vusys\Runabout\Context;
+use Vusys\Runabout\Execution\JourneyRunner;
 use Vusys\Runabout\Journey;
-use Vusys\Runabout\JourneyRunner;
+use Vusys\Runabout\Replay\TrailToken;
 use Vusys\Runabout\Step;
-use Vusys\Runabout\TrailToken;
 
 /**
  * Seed schema v2: order decisions come from a per-trail picker stream, and

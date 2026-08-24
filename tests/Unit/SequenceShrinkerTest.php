@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Vusys\Runabout\TrailShrinker;
+use Vusys\Runabout\Shrinking\SequenceShrinker;
 
 /**
  * The delta-debugging loop in isolation, driven by synthetic probes with a
@@ -19,14 +19,14 @@ use Vusys\Runabout\TrailShrinker;
  * *how many* probes are spent, not the mere reachability of the correct
  * final answer.
  */
-final class TrailShrinkerTest extends TestCase
+final class SequenceShrinkerTest extends TestCase
 {
     public function test_it_reduces_to_the_positions_the_failure_actually_needs(): void
     {
         // The "bug" needs positions 2 and 5 present; everything else is padding.
         $reproduces = fn (array $positions): bool => in_array(2, $positions, true) && in_array(5, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 9));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 9));
 
         $this->assertSame([2, 5], $result['positions']);
     }
@@ -36,14 +36,14 @@ final class TrailShrinkerTest extends TestCase
         // Only the full ten-position trail reproduces: nothing is removable.
         $reproduces = fn (array $positions): bool => count($positions) === 10;
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 9));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 9));
 
         $this->assertCount(10, $result['positions']);
     }
 
     public function test_it_reduces_to_a_single_execution_when_any_one_reproduces(): void
     {
-        $result = (new TrailShrinker(fn (array $positions): bool => $positions !== []))->shrink(range(0, 19));
+        $result = (new SequenceShrinker(fn (array $positions): bool => $positions !== []))->shrink(range(0, 19));
 
         $this->assertCount(1, $result['positions']);
     }
@@ -58,7 +58,7 @@ final class TrailShrinkerTest extends TestCase
             return in_array(7, $positions, true);
         };
 
-        $result = (new TrailShrinker($reproduces, budget: 5))->shrink(range(0, 99));
+        $result = (new SequenceShrinker($reproduces, budget: 5))->shrink(range(0, 99));
 
         $this->assertLessThanOrEqual(5, $probes, 'The shrinker must not exceed its replay budget.');
         $this->assertContains(7, $result['positions'], 'The best trail found must still reproduce.');
@@ -69,8 +69,8 @@ final class TrailShrinkerTest extends TestCase
         $reproduces = fn (array $positions): bool => in_array(1, $positions, true) && in_array(8, $positions, true);
 
         $this->assertSame(
-            (new TrailShrinker($reproduces))->shrink(range(0, 12))['positions'],
-            (new TrailShrinker($reproduces))->shrink(range(0, 12))['positions'],
+            (new SequenceShrinker($reproduces))->shrink(range(0, 12))['positions'],
+            (new SequenceShrinker($reproduces))->shrink(range(0, 12))['positions'],
         );
     }
 
@@ -81,7 +81,7 @@ final class TrailShrinkerTest extends TestCase
         // single position left to try, so it runs until the budget itself
         // — not the trail — is exhausted. Pins the *default* budget value
         // exactly (not 199, not 201): the constructor argument is omitted.
-        $shrinker = new TrailShrinker(fn (array $positions): bool => false);
+        $shrinker = new SequenceShrinker(fn (array $positions): bool => false);
 
         $result = $shrinker->shrink(range(0, 299));
 
@@ -98,7 +98,7 @@ final class TrailShrinkerTest extends TestCase
         // and coarse removal stops; sweepSingles then has nothing left to do.
         $reproduces = fn (array $positions): bool => $positions === [20];
 
-        $result = (new TrailShrinker($reproduces))->shrink([10, 20]);
+        $result = (new SequenceShrinker($reproduces))->shrink([10, 20]);
 
         $this->assertSame([20], $result['positions']);
         $this->assertSame(1, $result['replays']);
@@ -111,7 +111,7 @@ final class TrailShrinkerTest extends TestCase
         // replays are recorded.
         $reproduces = fn (array $positions): bool => false;
 
-        $result = (new TrailShrinker($reproduces, budget: 0))->shrink([0, 1, 2, 3, 4]);
+        $result = (new SequenceShrinker($reproduces, budget: 0))->shrink([0, 1, 2, 3, 4]);
 
         $this->assertSame(0, $result['replays']);
         $this->assertSame([0, 1, 2, 3, 4], $result['positions']);
@@ -127,7 +127,7 @@ final class TrailShrinkerTest extends TestCase
         // not appear.
         $reproduces = fn (array $positions): bool => in_array(2, $positions, true) && in_array(5, $positions, true);
 
-        $result = (new TrailShrinker($reproduces, budget: 3))->shrink(range(0, 5));
+        $result = (new SequenceShrinker($reproduces, budget: 3))->shrink(range(0, 5));
 
         $this->assertSame([1, 2, 3, 4, 5], $result['positions']);
         $this->assertSame(3, $result['replays']);
@@ -137,7 +137,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(4, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 4));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 4));
 
         $this->assertSame([4], $result['positions']);
         $this->assertSame(3, $result['replays']);
@@ -147,7 +147,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(1, $positions, true) && in_array(6, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 7));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 7));
 
         $this->assertSame([1, 6], $result['positions']);
         $this->assertSame(16, $result['replays']);
@@ -157,7 +157,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(0, $positions, true) && in_array(6, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 6));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 6));
 
         $this->assertSame([0, 6], $result['positions']);
         $this->assertSame(14, $result['replays']);
@@ -167,7 +167,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(3, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 7));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 7));
 
         $this->assertSame([3], $result['positions']);
         $this->assertSame(4, $result['replays']);
@@ -177,7 +177,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(1, $positions, true);
 
-        $result = (new TrailShrinker($reproduces, budget: 2))->shrink([0, 1, 2]);
+        $result = (new SequenceShrinker($reproduces, budget: 2))->shrink([0, 1, 2]);
 
         $this->assertSame([1, 2], $result['positions']);
         $this->assertSame(2, $result['replays']);
@@ -187,7 +187,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => count($positions) >= 3;
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 9));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 9));
 
         $this->assertSame([7, 8, 9], $result['positions']);
         $this->assertSame(10, $result['replays']);
@@ -195,7 +195,7 @@ final class TrailShrinkerTest extends TestCase
 
     public function test_a_single_position_trail_needs_no_probing(): void
     {
-        $result = (new TrailShrinker(fn (array $positions): bool => true))->shrink([42]);
+        $result = (new SequenceShrinker(fn (array $positions): bool => true))->shrink([42]);
 
         $this->assertSame([42], $result['positions']);
         $this->assertSame(0, $result['replays']);
@@ -205,7 +205,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => count($positions) === 2;
 
-        $result = (new TrailShrinker($reproduces))->shrink([1, 2]);
+        $result = (new SequenceShrinker($reproduces))->shrink([1, 2]);
 
         $this->assertSame([1, 2], $result['positions']);
         $this->assertSame(4, $result['replays']);
@@ -215,7 +215,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(3, $positions, true) && in_array(11, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 15));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 15));
 
         $this->assertSame([3, 11], $result['positions']);
         $this->assertSame(21, $result['replays']);
@@ -225,7 +225,7 @@ final class TrailShrinkerTest extends TestCase
     {
         $reproduces = fn (array $positions): bool => in_array(2, $positions, true) && in_array(5, $positions, true);
 
-        $result = (new TrailShrinker($reproduces, budget: 6))->shrink(range(0, 6));
+        $result = (new SequenceShrinker($reproduces, budget: 6))->shrink(range(0, 6));
 
         $this->assertSame([1, 2, 5, 6], $result['positions']);
         $this->assertSame(6, $result['replays']);
@@ -248,7 +248,7 @@ final class TrailShrinkerTest extends TestCase
             && in_array(0, $positions, true)
             && in_array(5, $positions, true);
 
-        $result = (new TrailShrinker($reproduces))->shrink(range(0, 5));
+        $result = (new SequenceShrinker($reproduces))->shrink(range(0, 5));
 
         $this->assertSame([0, 3, 4, 5], $result['positions']);
         $this->assertSame(15, $result['replays']);
@@ -264,7 +264,7 @@ final class TrailShrinkerTest extends TestCase
         // exactly — one probe later or earlier changes this count.
         $reproduces = fn (array $positions): bool => false;
 
-        $result = (new TrailShrinker($reproduces, budget: 18))->shrink(range(0, 7));
+        $result = (new SequenceShrinker($reproduces, budget: 18))->shrink(range(0, 7));
 
         $this->assertSame(range(0, 7), $result['positions']);
         $this->assertSame(18, $result['replays']);

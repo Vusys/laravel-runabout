@@ -37,10 +37,10 @@
         // PR-diff run has no headroom to absorb a new one, so these are
         // named explicitly instead.
         LessThan: {
-            ignore: ["Vusys\\Runabout\\JourneyRunner::runCanonical"],
+            ignore: ["Vusys\\Runabout\\Execution\\JourneyRunner::runCanonical"],
         },
         DecrementInteger: {
-            ignore: ["Vusys\\Runabout\\JourneyRunner::runCanonical"],
+            ignore: ["Vusys\\Runabout\\Execution\\JourneyRunner::runCanonical"],
         },
     },
     minMsi: 94,

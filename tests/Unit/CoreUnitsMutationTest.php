@@ -9,12 +9,12 @@ use PHPUnit\Framework\TestCase;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
 use Vusys\Runabout\Context;
-use Vusys\Runabout\DeferredStack;
+use Vusys\Runabout\Execution\DeferredStack;
+use Vusys\Runabout\Execution\JourneyInstance;
 use Vusys\Runabout\Journey;
-use Vusys\Runabout\JourneyInstance;
-use Vusys\Runabout\ScriptedDrawSource;
+use Vusys\Runabout\Randomness\ScriptedDrawSource;
+use Vusys\Runabout\Randomness\StreamDrawSource;
 use Vusys\Runabout\Step;
-use Vusys\Runabout\StreamDrawSource;
 
 /**
  * Targeted kills for the small-class mutants that survived the existing

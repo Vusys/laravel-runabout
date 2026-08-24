@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Execution;
+
+use Vusys\Runabout\Context;
+use Vusys\Runabout\Invariant;
+use Vusys\Runabout\Journey;
+use Vusys\Runabout\Step;
 
 /** @internal One journey's slice of an (optionally interleaved) trail. */
 final readonly class JourneyInstance

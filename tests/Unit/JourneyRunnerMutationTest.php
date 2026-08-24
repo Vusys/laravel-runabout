@@ -10,11 +10,11 @@ use Random\Randomizer;
 use RuntimeException;
 use Vusys\Runabout\Context;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
+use Vusys\Runabout\Execution\JourneyRunner;
 use Vusys\Runabout\Invariant;
 use Vusys\Runabout\Journey;
-use Vusys\Runabout\JourneyRunner;
+use Vusys\Runabout\Replay\TrailToken;
 use Vusys\Runabout\Step;
-use Vusys\Runabout\TrailToken;
 
 /**
  * Targeted kills for JourneyRunner mutants that survived the existing suite:
