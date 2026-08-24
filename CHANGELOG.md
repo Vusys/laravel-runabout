@@ -4,6 +4,8 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-24
+
 ### Changed
 
 - `src/` is now split by concern instead of being one flat namespace. Everything a journey author touches keeps its exact fully-qualified name at `Vusys\Runabout\` — `Journey`, `Step`, `Context`, `Invariant`, `Invariants`, `RunsJourneys`, `PendingJourney`, `Actor`, `Trail`, `TrailCoverage`, `HttpDriver`, and `Exceptions\*` are all untouched — so journeys, docs, and existing imports need no changes. The machinery behind them moved into namespaces that say what it is: `Execution\` (`JourneyRunner`, `JourneyInstance`, `DeferredStack`), `Randomness\` (`Draw`, `DrawSource`, `StreamDrawSource`, `ScriptedDrawSource`, `SeedSchema`), `Shrinking\` (`SequenceShrinker`, `ValueShrinker`, `FailureSignature`), `Replay\` (`TrailToken`, `TrailArtifact`), and `Support\` (`Environment`, `TrailReporter`). The root directory is now the package's public surface and nothing else, which is the contract the flat layout could not express. Behaviour is unchanged throughout; the existing suite passes untouched apart from imports.
