@@ -10,9 +10,9 @@ use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\TestCase;
 use Vusys\Runabout\Context;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
+use Vusys\Runabout\Execution\JourneyRunner;
 use Vusys\Runabout\Invariant;
 use Vusys\Runabout\Journey;
-use Vusys\Runabout\JourneyRunner;
 use Vusys\Runabout\Step;
 
 final class AroundStepTest extends TestCase

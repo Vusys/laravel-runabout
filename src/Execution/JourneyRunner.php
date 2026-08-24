@@ -2,16 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Execution;
 
 use Closure;
-use Random\Engine\Mt19937;
 use Random\Randomizer;
 use Throwable;
+use Vusys\Runabout\Context;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\InvariantViolationException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Exceptions\OrderNotViableException;
+use Vusys\Runabout\HttpDriver;
+use Vusys\Runabout\Invariant;
+use Vusys\Runabout\Journey;
+use Vusys\Runabout\Randomness\SeedSchema;
+use Vusys\Runabout\Randomness\StreamDrawSource;
+use Vusys\Runabout\Replay\TrailToken;
+use Vusys\Runabout\Step;
+use Vusys\Runabout\Trail;
 
 final class JourneyRunner
 {
@@ -50,7 +58,7 @@ final class JourneyRunner
     {
         $mode = $shuffle ? ($repeatBias > 1 ? 'repeat-heavy' : 'shuffled') : 'canonical';
         $instances = $this->instances($journeys, $seed, $http);
-        $picker = $this->pickerStream($seed);
+        $picker = SeedSchema::picker($seed);
 
         return $this->trail($instances, $seed, $mode, function (Trail $trail) use ($instances, $shuffle, $picker, $seed, $repeatBias): void {
             $shuffle
@@ -150,7 +158,7 @@ final class JourneyRunner
             // Placeholder stream: the runner installs a real per-execution
             // stream before any step runs, so this is only ever consulted by a
             // draw made outside an execution (which no correct journey does).
-            $context = new Context($this->executionStream($seed, $label, '__init__', 0), $http, $deferred);
+            $context = new Context(SeedSchema::execution($seed, $label, '__init__', 0), $http, $deferred);
 
             $this->registerActors($journey, $context);
 
@@ -197,7 +205,7 @@ final class JourneyRunner
         // too, are position-independent. Every instance shares one stack, so
         // draining any context unwinds the whole trail's teardowns in reverse.
         foreach ($instances as $instance) {
-            $instance->context->useSource(new StreamDrawSource($this->teardownStream($seed, $instance->label)));
+            $instance->context->useSource(new StreamDrawSource(SeedSchema::teardown($seed, $instance->label)));
         }
 
         foreach ($instances[0]->context->drainDeferred() as $teardown) {
@@ -327,7 +335,7 @@ final class JourneyRunner
      */
     private function executeStep(JourneyInstance $instance, Step $step, array $instances, Trail $trail, int $seed, int $runIndex, ?array $forcedDraws = null): void
     {
-        $source = $this->executionSource($seed, $instance->label, $step->name(), $runIndex, $forcedDraws);
+        $source = SeedSchema::source($seed, $instance->label, $step->name(), $runIndex, $forcedDraws);
 
         $trail->record($instance->label, $step->name(), $runIndex);
         $instance->context->useSource($source);
@@ -391,7 +399,7 @@ final class JourneyRunner
                 continue;
             }
 
-            $owner->context->useSource(new StreamDrawSource($this->baselineStream($seed, $owner->label)));
+            $owner->context->useSource(new StreamDrawSource(SeedSchema::baseline($seed, $owner->label)));
 
             $this->wrapped($owner, function () use ($owner, $baseline): void {
                 foreach ($baseline as $invariant) {
@@ -481,52 +489,6 @@ final class JourneyRunner
         }
 
         return null;
-    }
-
-    /**
-     * The picker stream for a trail: derived from the trail seed alone, so
-     * order decisions live here and depend on nothing else.
-     */
-    private function pickerStream(int $seed): Randomizer
-    {
-        return new Randomizer(new Mt19937(crc32($seed.'|__picker__')));
-    }
-
-    /**
-     * One execution's data stream: derived from the trail seed plus the
-     * execution's identity (instance label, step name, run index), so the nth
-     * run of a step draws the same values wherever it lands in the trail.
-     */
-    private function executionStream(int $seed, ?string $label, string $step, int $run): Randomizer
-    {
-        return new Randomizer(new Mt19937(crc32(sprintf('%d|%s|%s|%d', $seed, $label ?? '', $step, $run))));
-    }
-
-    /**
-     * The draw source for an execution: a recording stream source normally, or
-     * a scripted source (forced values, stream fallback) during value shrinking.
-     *
-     * @param  array<int, int>|null  $forcedDraws
-     */
-    private function executionSource(int $seed, ?string $label, string $step, int $run, ?array $forcedDraws): DrawSource
-    {
-        $stream = $this->executionStream($seed, $label, $step, $run);
-
-        return $forcedDraws === null
-            ? new StreamDrawSource($stream)
-            : new ScriptedDrawSource($forcedDraws, $stream);
-    }
-
-    /** The trail-end stream that teardowns draw from. */
-    private function teardownStream(int $seed, ?string $label): Randomizer
-    {
-        return new Randomizer(new Mt19937(crc32(sprintf('%d|__teardown__|%s', $seed, $label ?? ''))));
-    }
-
-    /** The trail-start stream that baseline invariant checks draw from. */
-    private function baselineStream(int $seed, ?string $label): Randomizer
-    {
-        return new Randomizer(new Mt19937(crc32(sprintf('%d|__baseline__|%s', $seed, $label ?? ''))));
     }
 
     /**

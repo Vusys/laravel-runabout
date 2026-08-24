@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Vusys\Runabout\Draw;
+use Vusys\Runabout\Randomness\Draw;
 use Vusys\Runabout\Trail;
 
 final class TrailTest extends TestCase

@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Shrinking;
 
 use Closure;
+use Vusys\Runabout\Randomness\Draw;
 
 /**
  * Minimises the drawn values inside an already-length-minimal trail, so the

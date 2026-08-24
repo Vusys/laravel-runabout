@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Shrinking;
 
 use Closure;
 
@@ -21,7 +21,7 @@ use Closure;
  * dependencies are removed — is the probe's concern too (a non-viable order
  * simply "does not reproduce").
  */
-final class TrailShrinker
+final class SequenceShrinker
 {
     private int $replays = 0;
 

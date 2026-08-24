@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Vusys\Runabout\Draw;
-use Vusys\Runabout\ValueShrinker;
+use Vusys\Runabout\Randomness\Draw;
+use Vusys\Runabout\Shrinking\ValueShrinker;
 
 /**
  * The per-value binary search in isolation, driven by synthetic probes with
@@ -15,7 +15,7 @@ use Vusys\Runabout\ValueShrinker;
  *
  * Several tests pin the exact `replays` count in addition to the final
  * `forced` values, on purpose: this class shares its overall shape with
- * TrailShrinker (deterministic, budget-capped, single shared replay
+ * SequenceShrinker (deterministic, budget-capped, single shared replay
  * counter), and many of its bugs only change *how many* probes are spent on
  * the way to the same-looking answer, not the answer's reachability.
  */

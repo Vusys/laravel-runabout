@@ -8,8 +8,8 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
+use Vusys\Runabout\Execution\JourneyRunner;
 use Vusys\Runabout\Journey;
-use Vusys\Runabout\JourneyRunner;
 use Vusys\Runabout\Step;
 
 /** The runner's failure paths: invalid journeys, impossible trails, and teardown failures. */

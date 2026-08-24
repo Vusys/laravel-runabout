@@ -10,6 +10,15 @@ use Illuminate\Support\Facades\DB;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Exceptions\OrderNotViableException;
+use Vusys\Runabout\Execution\JourneyRunner;
+use Vusys\Runabout\Randomness\Draw;
+use Vusys\Runabout\Replay\TrailArtifact;
+use Vusys\Runabout\Replay\TrailToken;
+use Vusys\Runabout\Shrinking\FailureSignature;
+use Vusys\Runabout\Shrinking\SequenceShrinker;
+use Vusys\Runabout\Shrinking\ValueShrinker;
+use Vusys\Runabout\Support\Environment;
+use Vusys\Runabout\Support\TrailReporter;
 
 /**
  * Fluent executor returned by RunsJourneys::journey(). Runs the canonical
@@ -86,7 +95,7 @@ final class PendingJourney
      */
     public function trail(array|string $artifact): self
     {
-        $this->trailArtifact = is_string($artifact) ? $this->decodeArtifact($artifact) : $artifact;
+        $this->trailArtifact = is_string($artifact) ? TrailArtifact::decode($artifact) : $artifact;
 
         return $this;
     }
@@ -232,14 +241,24 @@ final class PendingJourney
         return $this;
     }
 
+    /**
+     * Run the journey. When RUNABOUT_COVERAGE is set, every completed trail is
+     * also collected into an aggregate summary printed to STDERR once the run
+     * finishes — a failing run throws before that point and reports its failure
+     * instead, so nothing is printed.
+     */
     public function run(): void
     {
-        $coverage = $this->coverageCollector();
+        $coverage = TrailReporter::coverage();
+
+        if ($coverage instanceof TrailCoverage) {
+            $this->onTrail($coverage->record(...));
+        }
 
         $this->execute();
 
         if ($coverage instanceof TrailCoverage) {
-            fwrite(STDERR, sprintf("\n[%s] trail coverage\n%s\n", $this->names(), $coverage->describe()));
+            TrailReporter::printCoverage($this->names(), $coverage);
         }
     }
 
@@ -256,7 +275,8 @@ final class PendingJourney
             return;
         }
 
-        $artifact = $this->trailArtifact ?? $this->artifactFromEnvironment();
+        $environmentTrail = Environment::trail();
+        $artifact = $this->trailArtifact ?? ($environmentTrail === null ? null : TrailArtifact::decode($environmentTrail));
 
         if ($artifact !== null) {
             $this->registerVerbosePrinter(total: 1);
@@ -265,7 +285,7 @@ final class PendingJourney
             return;
         }
 
-        $replaySeed = $this->seed ?? $this->seedFromEnvironment();
+        $replaySeed = $this->seed ?? Environment::seed();
 
         if ($replaySeed !== null) {
             $this->registerVerbosePrinter(total: 1);
@@ -310,7 +330,7 @@ final class PendingJourney
      */
     private function shrink(JourneyRunner $runner, JourneyFailedException $failure): JourneyFailedException
     {
-        if (! $this->shrinkingEnabled() || ! in_array($failure->trail()->mode(), ['shuffled', 'repeat-heavy'], true)) {
+        if (! Environment::shrinkingEnabled() || ! in_array($failure->trail()->mode(), ['shuffled', 'repeat-heavy'], true)) {
             return $failure;
         }
 
@@ -330,9 +350,9 @@ final class PendingJourney
         $seed = $original->seed();
 
         // Length first: reduce to the shortest reproducing subsequence.
-        $result = (new TrailShrinker(
+        $result = (new SequenceShrinker(
             fn (array $positions): bool => $this->candidateReproduces($runner, $seed, $this->tokensAt($tokens, $positions), $signature),
-            $this->shrinkBudget(),
+            Environment::shrinkBudget(),
         ))->shrink(range(0, $count - 1));
 
         $shrunkTokens = $this->tokensAt($tokens, $result['positions']);
@@ -390,7 +410,7 @@ final class PendingJourney
 
         $result = (new ValueShrinker(
             fn (array $forced): bool => $this->candidateReproduces($runner, $seed, $shrunkTokens, $signature, $forced),
-            $this->shrinkBudget(),
+            Environment::shrinkBudget(),
         ))->shrink($baseline);
 
         // Pin only the tokens whose values changed; unchanged draws reproduce
@@ -497,18 +517,6 @@ final class PendingJourney
         return null;
     }
 
-    private function shrinkingEnabled(): bool
-    {
-        return getenv('RUNABOUT_SHRINK') !== '0';
-    }
-
-    private function shrinkBudget(): int
-    {
-        $budget = getenv('RUNABOUT_SHRINK_BUDGET');
-
-        return is_string($budget) && ctype_digit($budget) && (int) $budget > 0 ? (int) $budget : 200;
-    }
-
     private function notify(Trail $trail): void
     {
         foreach ($this->onTrail as $callback) {
@@ -516,46 +524,14 @@ final class PendingJourney
         }
     }
 
-    /**
-     * When RUNABOUT_COVERAGE is set, collect every completed trail into an
-     * aggregate coverage summary, printed to STDERR once the run finishes.
-     * A failing run reports its failure instead — nothing is printed.
-     */
-    private function coverageCollector(): ?TrailCoverage
-    {
-        if (in_array(getenv('RUNABOUT_COVERAGE'), [false, '', '0'], true)) {
-            return null;
-        }
-
-        $coverage = new TrailCoverage;
-
-        $this->onTrail($coverage->record(...));
-
-        return $coverage;
-    }
-
     /** When RUNABOUT_VERBOSE is set, print every completed trail to STDERR (stdout is swallowed by the test runner). */
     private function registerVerbosePrinter(?int $total): void
     {
-        if (in_array(getenv('RUNABOUT_VERBOSE'), [false, '', '0'], true)) {
-            return;
+        $printer = TrailReporter::verbosePrinter($this->names(), $total);
+
+        if ($printer instanceof Closure) {
+            $this->onTrail[] = $printer;
         }
-
-        $names = $this->names();
-        $count = 0;
-
-        $this->onTrail[] = function (Trail $trail) use ($names, $total, &$count): void {
-            $count++;
-
-            fwrite(STDERR, sprintf(
-                "\n[%s] trail %s (%s, seed %d)\n%s\n",
-                $names,
-                $total === null ? (string) $count : sprintf('%d/%d', $count, $total),
-                $trail->mode(),
-                $trail->seed(),
-                $trail->describe(markLast: false),
-            ));
-        };
     }
 
     private function names(): string
@@ -638,33 +614,11 @@ final class PendingJourney
      */
     private function deriveSeed(int $index): int
     {
-        if ($this->explore()) {
+        if (Environment::randomizeEnabled()) {
             return random_int(0, 2147483647);
         }
 
         return crc32(implode('+', array_map(fn (Journey $journey): string => $journey::class, $this->journeys)).'#'.$index);
-    }
-
-    private function explore(): bool
-    {
-        $flag = getenv('RUNABOUT_RANDOMIZE');
-
-        return ! in_array($flag, [false, '', '0'], true);
-    }
-
-    private function seedFromEnvironment(): ?int
-    {
-        $seed = getenv('RUNABOUT_SEED');
-
-        return is_string($seed) && is_numeric($seed) ? (int) $seed : null;
-    }
-
-    /** @return array<array-key, mixed>|null */
-    private function artifactFromEnvironment(): ?array
-    {
-        $raw = getenv('RUNABOUT_TRAIL');
-
-        return is_string($raw) && $raw !== '' ? $this->decodeArtifact($raw) : null;
     }
 
     /**
@@ -677,13 +631,13 @@ final class PendingJourney
      */
     private function replay(JourneyRunner $runner, array $artifact): void
     {
-        ['seed' => $seed, 'tokens' => $tokens, 'forcedDraws' => $forcedDraws] = $this->parseArtifact($artifact);
+        $parsed = TrailArtifact::parse($artifact);
 
         $trail = null;
 
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $tokens, $forcedDraws, &$trail): void {
-                $trail = $runner->runTokens($this->journeys, $seed, $tokens, $this->http, $forcedDraws);
+            ($this->wrapper)(function () use ($runner, $parsed, &$trail): void {
+                $trail = $runner->runTokens($this->journeys, $parsed->seed, $parsed->tokens, $this->http, $parsed->forcedDraws);
             });
         } catch (OrderNotViableException $notViable) {
             throw new InvalidJourneyException(sprintf(
@@ -695,89 +649,5 @@ final class PendingJourney
         if ($trail instanceof Trail) {
             $this->notify($trail);
         }
-    }
-
-    /**
-     * Read a RUNABOUT_TRAIL value: JSON, or "@path" to read the JSON from disk.
-     *
-     * @return array<array-key, mixed>
-     */
-    private function decodeArtifact(string $raw): array
-    {
-        if (str_starts_with($raw, '@')) {
-            $path = substr($raw, 1);
-            $contents = @file_get_contents($path);
-
-            if ($contents === false) {
-                throw new InvalidJourneyException(sprintf('Could not read the trail artifact file "%s".', $path));
-            }
-
-            $raw = $contents;
-        }
-
-        $decoded = json_decode($raw, true);
-
-        if (! is_array($decoded)) {
-            throw new InvalidJourneyException('A trail artifact must be JSON like {"seed":123,"steps":[[null,"step name",1]]}.');
-        }
-
-        return $decoded;
-    }
-
-    /**
-     * Validate a decoded artifact into a seed and typed tokens.
-     *
-     * @param  array<array-key, mixed>  $artifact
-     * @return array{seed: int, tokens: list<TrailToken>, forcedDraws: array<int, array<int, int>>}
-     */
-    private function parseArtifact(array $artifact): array
-    {
-        $seed = $artifact['seed'] ?? null;
-        $steps = $artifact['steps'] ?? null;
-
-        if (! is_int($seed) || ! is_array($steps)) {
-            throw new InvalidJourneyException('A trail artifact needs an integer "seed" and a "steps" list.');
-        }
-
-        $tokens = [];
-        $forcedDraws = [];
-        $index = 0;
-
-        foreach ($steps as $step) {
-            if (! is_array($step) || ! array_key_exists(0, $step) || ! array_key_exists(1, $step) || ! array_key_exists(2, $step)) {
-                throw new InvalidJourneyException('Each trail step must be a [label, step, run] triple.');
-            }
-
-            $label = $step[0];
-            $name = $step[1];
-            $run = $step[2];
-
-            if (($label !== null && ! is_string($label)) || ! is_string($name) || ! is_int($run)) {
-                throw new InvalidJourneyException('Each trail step must be [label|null, step string, run int].');
-            }
-
-            $tokens[] = new TrailToken($label, $name, $run);
-
-            // Optional fourth element: forced draw values pinned by value shrinking.
-            if (array_key_exists(3, $step)) {
-                if (! is_array($step[3])) {
-                    throw new InvalidJourneyException('A trail step\'s forced draws (element 4) must be a list of integers.');
-                }
-
-                $values = [];
-                foreach ($step[3] as $value) {
-                    if (! is_int($value)) {
-                        throw new InvalidJourneyException('A trail step\'s forced draws (element 4) must be a list of integers.');
-                    }
-                    $values[] = $value;
-                }
-
-                $forcedDraws[$index] = $values;
-            }
-
-            $index++;
-        }
-
-        return ['seed' => $seed, 'tokens' => $tokens, 'forcedDraws' => $forcedDraws];
     }
 }

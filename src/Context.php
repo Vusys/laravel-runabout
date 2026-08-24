@@ -12,6 +12,9 @@ use Illuminate\Testing\TestResponse;
 use Random\Randomizer;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
+use Vusys\Runabout\Execution\DeferredStack;
+use Vusys\Runabout\Randomness\DrawSource;
+use Vusys\Runabout\Randomness\StreamDrawSource;
 
 /**
  * The mutable bag threaded through a single trail: remembered values, run

@@ -6,9 +6,9 @@ namespace Vusys\Runabout\Tests\Feature;
 
 use Vusys\Runabout\Context;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
+use Vusys\Runabout\Execution\JourneyRunner;
 use Vusys\Runabout\Invariants;
 use Vusys\Runabout\Journey;
-use Vusys\Runabout\JourneyRunner;
 use Vusys\Runabout\Step;
 use Vusys\Runabout\Tests\Fixtures\Models\Community;
 use Vusys\Runabout\Tests\Fixtures\Models\Post;

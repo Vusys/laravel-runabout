@@ -4,6 +4,18 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- `src/` is now split by concern instead of being one flat namespace. Everything a journey author touches keeps its exact fully-qualified name at `Vusys\Runabout\` — `Journey`, `Step`, `Context`, `Invariant`, `Invariants`, `RunsJourneys`, `PendingJourney`, `Actor`, `Trail`, `TrailCoverage`, `HttpDriver`, and `Exceptions\*` are all untouched — so journeys, docs, and existing imports need no changes. The machinery behind them moved into namespaces that say what it is: `Execution\` (`JourneyRunner`, `JourneyInstance`, `DeferredStack`), `Randomness\` (`Draw`, `DrawSource`, `StreamDrawSource`, `ScriptedDrawSource`, `SeedSchema`), `Shrinking\` (`SequenceShrinker`, `ValueShrinker`, `FailureSignature`), `Replay\` (`TrailToken`, `TrailArtifact`), and `Support\` (`Environment`, `TrailReporter`). The root directory is now the package's public surface and nothing else, which is the contract the flat layout could not express. Behaviour is unchanged throughout; the existing suite passes untouched apart from imports.
+- `TrailShrinker` is now `Shrinking\SequenceShrinker`, so it reads as a sibling of `ValueShrinker` — the two are the same algorithm over sequence positions and over drawn values, and the old name described what it shrank a trail *of* rather than what it shrinks.
+
+### Added
+
+- `Randomness\SeedSchema`: seed schema v2's five stream derivations, which were private methods on `JourneyRunner`, are now a class of their own. The schema is a compatibility surface — changing any string built there re-keys every existing artifact — so it is worth being able to point at, and `SeedDerivationTest` now pins the two properties that matter (each stream is a pure function of the execution's identity; the picker, teardown, baseline, and execution streams are all distinct).
+- `Replay\TrailArtifact`: the `RUNABOUT_TRAIL` wire format now has one owner. Encoding lived on `Trail` and decoding plus validation lived on `PendingJourney`, so a change to the format meant editing two unrelated classes at opposite ends of the package; both halves of the contract now sit together.
+- `Support\Environment`: every `RUNABOUT_*` variable a run responds to is read in one place, matching what `docs/environment.md` documents. The existing asymmetry is preserved and now documented rather than incidental — `RUNABOUT_SHRINK` is an opt-*out* where only the exact string `"0"` disables shrinking, while every other flag is an opt-*in* where unset, empty, and `"0"` all read as off.
+- `Support\TrailReporter`: the two STDERR reporting concerns (`RUNABOUT_VERBOSE`'s per-trail log and `RUNABOUT_COVERAGE`'s end-of-run summary) moved out of the fluent executor.
+
 ## [0.1.1] - 2026-08-08
 
 ### Fixed

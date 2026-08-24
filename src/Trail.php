@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout;
 
+use Vusys\Runabout\Randomness\Draw;
+use Vusys\Runabout\Replay\TrailArtifact;
+use Vusys\Runabout\Replay\TrailToken;
+
 /** The concrete ordered sequence of steps one execution took. */
 final class Trail
 {
@@ -105,17 +109,27 @@ final class Trail
      */
     public function artifact(): array
     {
-        $steps = [];
+        return TrailArtifact::encode($this->seed, $this->tokens, $this->pinnedDraws());
+    }
 
-        foreach ($this->tokens as $index => $token) {
+    /**
+     * The drawn values of every execution value shrinking pinned, keyed by
+     * token index — what makes an artifact reproduce those exact values, and
+     * what the trail listing annotates with "[drew ...]".
+     *
+     * @return array<int, list<int>>
+     */
+    private function pinnedDraws(): array
+    {
+        $pinned = [];
+
+        foreach (array_keys($this->tokens) as $index) {
             if (($this->pinned[$index] ?? false) && ($this->draws[$index] ?? []) !== []) {
-                $steps[] = [$token->label, $token->step, $token->run, array_map(fn (Draw $draw): int => $draw->value, $this->draws[$index])];
-            } else {
-                $steps[] = [$token->label, $token->step, $token->run];
+                $pinned[$index] = array_map(fn (Draw $draw): int => $draw->value, $this->draws[$index]);
             }
         }
 
-        return ['seed' => $this->seed, 'steps' => $steps];
+        return $pinned;
     }
 
     /** @param bool $markLast Point at the last step with a ">" marker — where the failure output points at the failing step. */
@@ -128,6 +142,7 @@ final class Trail
         $lines = [];
         $runs = [];
         $last = count($this->tokens) - 1;
+        $pinned = $this->pinnedDraws();
 
         foreach ($this->tokens as $index => $token) {
             $name = $token->labelled();
@@ -137,8 +152,8 @@ final class Trail
 
             // Value-shrunk executions show the minimal drawn values, so the
             // trail reads like a hand-written test instead of a seed to re-derive.
-            if (($this->pinned[$index] ?? false) && ($this->draws[$index] ?? []) !== []) {
-                $label .= sprintf(' [drew %s]', implode(', ', array_map(fn (Draw $draw): string => (string) $draw->value, $this->draws[$index])));
+            if (isset($pinned[$index])) {
+                $label .= sprintf(' [drew %s]', implode(', ', array_map(strval(...), $pinned[$index])));
             }
 
             $lines[] = sprintf('%s %2d. %s', $marker, $index + 1, $label);

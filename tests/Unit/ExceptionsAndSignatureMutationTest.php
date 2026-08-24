@@ -11,7 +11,7 @@ use RuntimeException;
 use Vusys\Runabout\Exceptions\InvariantViolationException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Exceptions\OrderNotViableException;
-use Vusys\Runabout\FailureSignature;
+use Vusys\Runabout\Shrinking\FailureSignature;
 use Vusys\Runabout\Trail;
 
 /**

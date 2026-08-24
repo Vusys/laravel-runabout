@@ -13,11 +13,13 @@ use Vusys\Runabout\PendingJourney;
 use Vusys\Runabout\Step;
 
 /**
- * trail()'s artifact parsing (parseArtifact/decodeArtifact) is pure and needs
- * no database: every case here feeds a decoded artifact straight to
+ * trail()'s artifact parsing (Replay\TrailArtifact) is pure and needs no
+ * database: every case here feeds a decoded artifact straight to
  * PendingJourney with a no-op wrapper (as ExecutionModesTest does) and reads
  * either the thrown InvalidJourneyException's exact message or the resulting
- * Trail's observable effect (a forced draw actually being applied).
+ * Trail's observable effect (a forced draw actually being applied). Driving it
+ * through the public entry point keeps these cases pinned to the behaviour
+ * users see, not to the collaborator that happens to implement it.
  */
 final class PendingJourneyArtifactTest extends TestCase
 {

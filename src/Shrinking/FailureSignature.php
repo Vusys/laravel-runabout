@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Shrinking;
 
 use Throwable;
 use Vusys\Runabout\Exceptions\InvariantViolationException;

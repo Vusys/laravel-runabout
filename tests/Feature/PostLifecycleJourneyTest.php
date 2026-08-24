@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
-use Vusys\Runabout\JourneyRunner;
+use Vusys\Runabout\Execution\JourneyRunner;
 use Vusys\Runabout\RunsJourneys;
 use Vusys\Runabout\Tests\Fixtures\PostLifecycleJourney;
 use Vusys\Runabout\Tests\Fixtures\PostService;

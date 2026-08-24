@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Vusys\Runabout;
+namespace Vusys\Runabout\Replay;
 
 /**
  * One execution's identity within a trail: which instance ran which step for
