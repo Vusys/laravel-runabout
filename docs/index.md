@@ -30,13 +30,12 @@ One journey definition becomes twenty-six executions: the declared order, then t
 
 | | |
 |---|---|
-| New here? | [Introduction](introduction.md) → [Installation](installation.md) → [Quick start](quick-start.md) |
-| The mental model | [Core concepts](concepts.md) |
+| Getting started | [Introduction](introduction.md) → [Installation](installation.md) → [Quick start](quick-start.md) → [Core concepts](concepts.md) |
 | Building journeys | [Defining steps](steps.md), [The context](context.md), [Invariants](invariants.md) |
 | Driving the app | [Actors & HTTP](actors-http.md), [Time travel](time-travel.md) |
-| Running them | [Execution modes](execution-modes.md), [Interleaving journeys](interleaving.md), [Resetting state](database-resets.md) |
-| When something fails | [Reproducing failures](reproducing-failures.md) |
-| Measuring the run | [Trails & coverage](observability.md), [Environment variables](environment.md) |
+| Running journeys | [Execution modes](execution-modes.md), [Interleaving journeys](interleaving.md), [Resetting state](database-resets.md) |
+| Diagnosing runs | [Reproducing failures](reproducing-failures.md), [Trails & coverage](observability.md), [Troubleshooting](troubleshooting.md) |
+| Reference | [API reference](api-reference.md), [Environment variables](environment.md), [Changelog](changelog.md) |
 
 ## Requirements
 
