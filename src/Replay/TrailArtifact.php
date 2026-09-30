@@ -19,6 +19,8 @@ use Vusys\Runabout\Exceptions\InvalidJourneyException;
  * Encoding and decoding live together deliberately: they are two halves of one
  * compatibility contract. A token without forced draws stays a plain triple, so
  * every artifact written by an earlier version still parses.
+ *
+ * @internal
  */
 final readonly class TrailArtifact
 {

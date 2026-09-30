@@ -23,6 +23,8 @@ use Random\Randomizer;
  * and what pins it as a compatibility surface: changing any string built here
  * changes which values every existing artifact replays, so it is a schema
  * version bump, not a refactor.
+ *
+ * @internal
  */
 final class SeedSchema
 {

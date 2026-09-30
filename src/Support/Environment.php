@@ -14,6 +14,8 @@ namespace Vusys\Runabout\Support;
  * default), while every other flag is an opt-*in* through flag(), where unset,
  * empty, and "0" all read as off. That difference is behaviour existing runs
  * depend on, so it is preserved here rather than smoothed over.
+ *
+ * @internal
  */
 final class Environment
 {

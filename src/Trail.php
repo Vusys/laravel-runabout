@@ -29,7 +29,7 @@ final class Trail
         private readonly string $mode,
     ) {}
 
-    /** Record one execution. The run index is the stream key, not a positional recount. */
+    /** @internal Record one execution. The run index is the stream key, not a positional recount. */
     public function record(?string $label, string $step, int $run): void
     {
         $this->tokens[] = new TrailToken($label, $step, $run);
@@ -43,6 +43,8 @@ final class Trail
      * called after the execution so the value shrinker has its baseline. A
      * $forced execution had its draws pinned by value shrinking, so those
      * values are written into the replay artifact.
+     *
+     * @internal
      *
      * @param  list<Draw>  $draws
      */
