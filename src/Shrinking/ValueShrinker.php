@@ -22,6 +22,8 @@ use Vusys\Runabout\Randomness\Draw;
  *
  * Deterministic and budget-capped, structurally identical to TrailShrinker but
  * over values instead of positions.
+ *
+ * @internal
  */
 final class ValueShrinker
 {
