@@ -12,6 +12,8 @@ use Vusys\Runabout\TrailCoverage;
  * The run's STDERR reporting: the per-trail verbose log (RUNABOUT_VERBOSE) and
  * the end-of-run coverage summary (RUNABOUT_COVERAGE). Both write to STDERR
  * rather than stdout, which the test runner swallows.
+ *
+ * @internal
  */
 final class TrailReporter
 {

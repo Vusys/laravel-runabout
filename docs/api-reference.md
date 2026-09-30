@@ -234,3 +234,14 @@ All under `Vusys\Runabout\Exceptions\`.
 | `InvariantViolationException` | An invariant threw. Exposes readonly `$invariant` and `$step` naming both sides. Surfaces as the `previous` of a `JourneyFailedException`. |
 | `InvalidJourneyException` | The journey definition itself is broken — duplicate names, unknown `after()` target, deadlock, runaway, an `aroundStep()` that didn't run the execution. See [Troubleshooting](troubleshooting.md). |
 | `OrderNotViableException` | Internal. A forced order reached a step that wasn't eligible; the ordering is skipped rather than failed. |
+
+## Stability
+
+From 1.0 the package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). A minor or patch release will not break anything below:
+
+- Every class, trait, and exception on this page, and every public method it lists.
+- `Replay\TrailToken` and `Randomness\Draw`, as far as the `Trail` methods above return them: their public properties and `TrailToken::labelled()`.
+- The `RUNABOUT_*` environment variables in [Environment variables](environment.md), and what each one does.
+- Replay. Given the same journey definition, a seed or a `RUNABOUT_TRAIL` artifact printed by any 1.x release replays the same trail on every later 1.x release.
+
+Everything else is internal and may change in any release: the `Execution\`, `Randomness\`, `Shrinking\`, `Replay\`, and `Support\` namespaces (apart from the two value objects above), anything marked `@internal`, and the exact wording of failure output.

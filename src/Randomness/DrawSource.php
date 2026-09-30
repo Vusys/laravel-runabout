@@ -16,6 +16,8 @@ use Random\Randomizer;
  * execution that reaches for the raw randomizer() escape hatch is marked opaque
  * and left out of value shrinking (its draws still replay verbatim from the
  * stream — they just aren't candidates for minimisation).
+ *
+ * @internal
  */
 interface DrawSource
 {

@@ -21,6 +21,7 @@ use Vusys\Runabout\Replay\TrailToken;
 use Vusys\Runabout\Step;
 use Vusys\Runabout\Trail;
 
+/** @internal */
 final class JourneyRunner
 {
     /**

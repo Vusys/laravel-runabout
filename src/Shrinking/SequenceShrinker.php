@@ -20,6 +20,8 @@ use Closure;
  * fails identically, and viability — a token whose step is unreachable once its
  * dependencies are removed — is the probe's concern too (a non-viable order
  * simply "does not reproduce").
+ *
+ * @internal
  */
 final class SequenceShrinker
 {

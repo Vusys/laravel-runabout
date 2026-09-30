@@ -13,6 +13,8 @@ use Random\Randomizer;
  * to the keyed stream — that fallback is what preserves position-independence:
  * scripting one execution's values never perturbs another's, and a candidate
  * whose control flow draws more than the ledger recorded still runs.
+ *
+ * @internal
  */
 final class ScriptedDrawSource implements DrawSource
 {

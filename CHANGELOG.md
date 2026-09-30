@@ -4,6 +4,15 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-30
+
+The first stable release. There are no behaviour changes since 0.2.0; this release commits to the public API it already had.
+
+### Changed
+
+- The public API is now covered by Semantic Versioning. [API reference → Stability](https://vusys.github.io/laravel-runabout/api-reference/#stability) spells out what that covers: the root `Vusys\Runabout\` classes and `Exceptions\*`, the `TrailToken` and `Draw` values that `Trail` hands out, the `RUNABOUT_*` environment variables, and replay, so a seed or `RUNABOUT_TRAIL` artifact from any 1.x release replays the same trail on every later 1.x release.
+- The `Execution\`, `Randomness\`, `Shrinking\`, `Replay\`, and `Support\` namespaces are internal. Their classes are now marked `@internal`, as are `Trail::record()` and `Trail::attachDraws()`, which only the runner calls.
+
 ## [0.2.0] - 2026-08-24
 
 ### Changed

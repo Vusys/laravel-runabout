@@ -11,6 +11,8 @@ use Random\Randomizer;
  * schema v2) and records each draw. This is what the runner installs per
  * execution on an ordinary run; recording is cheap and only read when a value
  * shrink pass needs the baseline.
+ *
+ * @internal
  */
 final class StreamDrawSource implements DrawSource
 {

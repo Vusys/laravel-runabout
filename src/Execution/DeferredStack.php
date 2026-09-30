@@ -10,6 +10,8 @@ use Closure;
  * The trail's teardown stack. One per trail and shared by every journey
  * instance in it, so teardowns unwind in reverse execution order across the
  * whole trail — even when the executions interleave instances.
+ *
+ * @internal
  */
 final class DeferredStack
 {

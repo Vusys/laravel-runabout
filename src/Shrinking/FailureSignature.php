@@ -16,6 +16,8 @@ use Vusys\Runabout\Exceptions\JourneyFailedException;
  * identified by the invariant's labelled name; a step failure by the failing
  * step's labelled name plus the thrown exception's class. Two failures with
  * the same signature are "the same bug", wherever in the trail they land.
+ *
+ * @internal
  */
 final readonly class FailureSignature
 {
