@@ -13,6 +13,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 - `repeatable()`'s `$min` now defaults to `null`, meaning "keep the current minimum", so `->optional()->repeatable(max: 3)` stays optional. Behaviour is unchanged for steps that never call `optional()`.
 
+### Fixed
+
+- A shrink that removed no executions but minimised drawn values was headed "Shrunk from N executions to N", which read like a bug. It now says `Shrunk drawn values; all N executions are needed (R replays):`. ([#42](https://github.com/Vusys/laravel-runabout/issues/42))
+
 ## [1.0.0] - 2026-09-30
 
 The first stable release. There are no behaviour changes since 0.2.0; this release commits to the public API it already had.

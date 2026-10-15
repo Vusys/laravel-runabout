@@ -43,6 +43,8 @@ Replay with RUNABOUT_TRAIL='{"seed":1351231025,"steps":[[null,"open opportunity"
 Replay the full 13-execution trail with RUNABOUT_SEED=1351231025.
 ```
 
+When every execution turns out to be needed but drawn values could still be minimised, the headline says so instead: `Shrunk drawn values; all 2 executions are needed (12 replays):`.
+
 "The same way" is exact: same exception class plus the invariant's (or failing step's) name, so shrinking never quietly swaps the reported bug for a different one it happened to trip while removing steps. The search is deterministic and budget-capped — `RUNABOUT_SHRINK=0` turns it off, `RUNABOUT_SHRINK_BUDGET` changes the cap (default 200 replays).
 
 Shrinking runs in two passes:
