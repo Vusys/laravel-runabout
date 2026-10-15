@@ -87,6 +87,10 @@ final class JourneyRunner
                 $step = $instance->steps[$index];
 
                 if (! $step->isEnabled($instance->context)) {
+                    if ($step->minRuns() === 0) {
+                        continue;
+                    }
+
                     throw new OrderNotViableException($step->name());
                 }
 
@@ -250,6 +254,10 @@ final class JourneyRunner
                 $step = $instance->steps[$position];
 
                 if (! $step->isEnabled($instance->context)) {
+                    if ($step->minRuns() === 0) {
+                        continue;
+                    }
+
                     throw new InvalidJourneyException(sprintf(
                         'Step "%s" is not enabled when reached in declared order (round robin across instances); the canonical order must be a valid trail. Check its when()/after() constraints.',
                         $step->name(),

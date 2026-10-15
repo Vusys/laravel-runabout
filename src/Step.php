@@ -85,18 +85,35 @@ final class Step
     }
 
     /**
-     * @param  int|null  $max  Maximum executions per trail; null means unlimited.
-     * @param  int  $min  Minimum executions before the trail is allowed to complete
-     *                    (default 1). A single "advance" step with min > 1 drives a
-     *                    bounded random walk — the shape a state machine wants.
+     * The trail may complete without this step ever running. For branches
+     * another step can close off for good (a conversion that destroys what
+     * this step acts on): a required step there would deadlock the trail. An
+     * optional step that is not enabled when its slot comes up in declared
+     * order, or in an exhaustive ordering, is skipped rather than failing.
      */
-    public function repeatable(?int $max = null, int $min = 1): self
+    public function optional(): self
     {
+        $this->minRuns = 0;
+
+        return $this;
+    }
+
+    /**
+     * @param  int|null  $max  Maximum executions per trail; null means unlimited.
+     * @param  int|null  $min  Minimum executions before the trail is allowed to complete;
+     *                         null keeps the current minimum (1, or 0 after optional()).
+     *                         A single "advance" step with min > 1 drives a bounded
+     *                         random walk — the shape a state machine wants. 0 makes
+     *                         the step optional.
+     */
+    public function repeatable(?int $max = null, ?int $min = null): self
+    {
+        $min ??= $this->minRuns;
         $this->maxRuns = $max ?? PHP_INT_MAX;
         $this->minRuns = $min;
 
-        if ($min < 1) {
-            throw new InvalidJourneyException(sprintf('Step "%s" needs a minimum of at least 1 run, got %d.', $this->name, $min));
+        if ($min < 0) {
+            throw new InvalidJourneyException(sprintf('Step "%s" needs a minimum of at least 0 runs, got %d.', $this->name, $min));
         }
 
         if ($min > $this->maxRuns) {

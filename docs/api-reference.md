@@ -41,7 +41,8 @@ public function assert(Closure $fn): self                          // fn (Contex
 public function assertWhen(Closure $condition, Closure $then, ?Closure $otherwise = null): self
 public function when(Closure $fn): self                            // fn (Context): bool — repeatable
 public function after(string ...$steps): self
-public function repeatable(?int $max = null, int $min = 1): self
+public function repeatable(?int $max = null, ?int $min = null): self   // min null keeps the current minimum
+public function optional(): self                                  // min 0: the trail may finish without it
 public function weight(int $weight): self                          // >= 1
 public function teardown(Closure $fn): self
 ```
