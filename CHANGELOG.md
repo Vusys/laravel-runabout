@@ -7,6 +7,7 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 ### Added
 
 - `Step::optional()`, and `repeatable(min: 0)`: a step the trail may finish without. Real apps have branches that close each other off — converting a BookStack book to a shelf destroys its chapters, so a "delete chapter" step can never run afterwards — and a required step there deadlocked every trail that took the other branch first. An optional step that is not eligible when reached in declared order or in an exhaustive ordering is skipped instead of failing the trail.
+- `PendingJourney::minLength(int $executions)`: shuffled trails keep picking eligible steps until they are at least that long, ending early only when nothing is eligible. Without it, a journey of mostly optional steps stops as soon as its required steps have run — a BookStack comments journey produced 14 distinct orderings from 26 trails. The default of 0 leaves every existing seed's trail unchanged.
 
 ### Changed
 

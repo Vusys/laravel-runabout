@@ -59,6 +59,7 @@ The fluent runner returned by `journey()` / `interleave()`. See [Execution modes
 // Ordering
 public function shuffles(int $count): self                         // default 10
 public function repeatHeavy(int $bias = 5): self
+public function minLength(int $executions): self                   // default 0: stop once minimums are met
 public function exhaustive(int $limit = 720): self
 
 // Replay

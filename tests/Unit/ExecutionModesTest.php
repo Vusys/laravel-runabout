@@ -305,6 +305,38 @@ final class ExecutionModesTest extends TestCase
         $this->assertSame(['A: close', 'B: first', 'B: second'], $trails[0]);
     }
 
+    public function test_min_length_keeps_shuffled_trails_going_past_their_minimums(): void
+    {
+        $trails = function (?int $minLength, ?int $optionalMax): array {
+            /** @var ArrayObject<int, list<string>> $trails */
+            $trails = new ArrayObject;
+            $pending = $this->pending($this->journey([
+                Step::make('required'),
+                Step::make('optional')->repeatable(max: $optionalMax, min: 0),
+            ]))->shuffles(15)->onTrail(function (Trail $trail) use ($trails): void {
+                if ($trail->isShuffled()) {
+                    $trails[] = $trail->steps();
+                }
+            });
+
+            if ($minLength !== null) {
+                $pending->minLength($minLength);
+            }
+
+            $pending->run();
+
+            return $trails->getArrayCopy();
+        };
+        $lengths = fn (array $trails): array => array_values(array_unique(array_map(count(...), $trails)));
+
+        foreach ($trails(null, null) as $trail) {
+            $this->assertSame('required', end($trail), 'Without minLength a trail stops as soon as "required" has run.');
+        }
+
+        $this->assertSame([10], $lengths($trails(10, null)));
+        $this->assertSame([3], $lengths($trails(10, 2)), 'A trail with nothing left eligible ends short of minLength instead of failing.');
+    }
+
     public function test_exhaustive_mode_runs_orderings_that_skip_a_closed_off_optional_step(): void
     {
         /** @var ArrayObject<int, string> $orders */
