@@ -148,6 +148,22 @@ final class JourneyRunner
     }
 
     /**
+     * Spreadsheet-column labels: A..Z, then AA, AB, ... Labels key each
+     * instance's seed streams and appear in replay artifacts, so the first 26
+     * must stay the single letters they have always been.
+     */
+    private function instanceLabel(int $index): string
+    {
+        $label = '';
+
+        for ($n = $index + 1; $n > 0; $n = intdiv($n - 1, 26)) {
+            $label = chr(65 + ($n - 1) % 26).$label;
+        }
+
+        return $label;
+    }
+
+    /**
      * @param  non-empty-list<Journey>  $journeys
      * @return non-empty-list<JourneyInstance>
      */
@@ -158,7 +174,7 @@ final class JourneyRunner
         $instances = [];
 
         foreach ($journeys as $i => $journey) {
-            $label = $labelled ? chr(65 + $i) : null;
+            $label = $labelled ? $this->instanceLabel($i) : null;
 
             // Placeholder stream: the runner installs a real per-execution
             // stream before any step runs, so this is only ever consulted by a

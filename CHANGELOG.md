@@ -16,6 +16,7 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 ### Fixed
 
 - A shrink that removed no executions but minimised drawn values was headed "Shrunk from N executions to N", which read like a bug. It now says `Shrunk drawn values; all N executions are needed (R replays):`. ([#42](https://github.com/Vusys/laravel-runabout/issues/42))
+- Interleaving more than 26 journeys labelled the 27th instance `[`, then `\` and so on, and labels repeated after 191 instances because `chr()` wraps. Labels now continue spreadsheet-style (`AA`, `AB`, …). `A`–`Z` are unchanged, so every existing seed and `RUNABOUT_TRAIL` artifact replays identically. This also clears the PHPStan `chr()` error reported on PHP 8.5. ([#45](https://github.com/Vusys/laravel-runabout/issues/45))
 
 ## [1.0.0] - 2026-09-30
 

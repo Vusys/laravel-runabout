@@ -67,6 +67,18 @@ final class JourneyRunnerTest extends TestCase
         $this->assertSame(['a', 'b', 'c', 'd'], $trail->steps());
     }
 
+    public function test_instances_past_z_get_spreadsheet_style_labels(): void
+    {
+        $journeys = array_map(fn (): Journey => $this->journey([Step::make('s')]), range(1, 28));
+
+        $trail = (new JourneyRunner)->runInterleaved($journeys, seed: 1, shuffle: false);
+
+        // A..Z are unchanged (they key seed streams and replay artifacts);
+        // the 27th and 28th instances continue as AA, AB rather than "[", "\".
+        $expected = array_map(fn (string $label): string => "{$label}: s", [...range('A', 'Z'), 'AA', 'AB']);
+        $this->assertSame($expected, $trail->steps());
+    }
+
     public function test_interleaved_canonical_mode_round_robins_across_instances_instead_of_concatenating(): void
     {
         $a = $this->journey([Step::make('a1'), Step::make('a2')]);
