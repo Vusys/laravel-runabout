@@ -282,6 +282,29 @@ final class ExecutionModesTest extends TestCase
         $this->pending($closedOff(false))->shuffles(0)->run();
     }
 
+    public function test_skipping_an_optional_step_in_declared_order_does_not_skip_other_instances(): void
+    {
+        /** @var ArrayObject<int, list<string>> $trails */
+        $trails = new ArrayObject;
+
+        $closing = $this->journey([
+            Step::make('close')->act(fn ($ctx): mixed => $ctx->remember('closed', true)),
+            Step::make('branch')->when(fn ($ctx): bool => ! $ctx->has('closed'))->optional(),
+        ]);
+        $other = $this->journey([Step::make('first'), Step::make('second')]);
+
+        (new PendingJourney([$closing, $other], fn (Closure $trail) => $trail()))
+            ->shuffles(0)
+            ->onTrail(function (Trail $trail) use ($trails): void {
+                $trails[] = $trail->steps();
+            })
+            ->run();
+
+        // Round robin by position: A's skipped "branch" shares position 1
+        // with B's "second", which must still run.
+        $this->assertSame(['A: close', 'B: first', 'B: second'], $trails[0]);
+    }
+
     public function test_exhaustive_mode_runs_orderings_that_skip_a_closed_off_optional_step(): void
     {
         /** @var ArrayObject<int, string> $orders */
