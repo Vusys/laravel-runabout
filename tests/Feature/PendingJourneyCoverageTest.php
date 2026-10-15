@@ -637,7 +637,7 @@ final class PendingJourneyCoverageTest extends TestCase
             $this->drawThenAssertPending(1, 100)->seed(1)->run();
             $this->fail('expected failure');
         } catch (JourneyFailedException $e) {
-            $this->assertStringContainsString('Shrunk from 2 executions to 2 (12 replays)', $e->getMessage());
+            $this->assertStringContainsString('Shrunk drawn values; all 2 executions are needed (12 replays)', $e->getMessage());
 
             $steps = $e->trail()->artifact()['steps'];
             $draw = $steps[0];

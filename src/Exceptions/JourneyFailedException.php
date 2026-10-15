@@ -58,7 +58,12 @@ final class JourneyFailedException extends RuntimeException
     {
         $shrunkExecutions = count($shrunkReplay->trail()->tokens());
 
-        $message = sprintf("Shrunk from %d executions to %d (%d replays):\n%s", $originalExecutions, $shrunkExecutions, $replays, $shrunkReplay->getMessage())
+        // A shrink that removed no executions still minimised drawn values.
+        $headline = $shrunkExecutions < $originalExecutions
+            ? sprintf('Shrunk from %d executions to %d (%d replays):', $originalExecutions, $shrunkExecutions, $replays)
+            : sprintf('Shrunk drawn values; all %d executions are needed (%d replays):', $originalExecutions, $replays);
+
+        $message = $headline."\n".$shrunkReplay->getMessage()
             .sprintf("\nReplay the full %d-execution trail with RUNABOUT_SEED=%d.", $originalExecutions, $originalSeed);
 
         $exception = new self($message, 0, $shrunkReplay->getPrevious());
