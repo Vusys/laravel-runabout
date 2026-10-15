@@ -17,7 +17,7 @@ The usual causes:
 - **A mutually exclusive pair.** Two steps that each disable the other leave whichever loses the coin flip stranded.
 - **A `repeatable(min: n)` step that stops being eligible.** The deadlock check counts a step as pending until it has run `minRuns()` times, so a step needing three runs whose precondition goes false after one deadlocks just as surely as one that never ran.
 
-Fix it by loosening the precondition, adding an `after()` so the step is only *considered* once the world supports it, or making the step's action tolerate the state it was trying to exclude. Bounding the trail further won't help — the trail is stuck, not long.
+Fix it by loosening the precondition, adding an `after()` so the step is only *considered* once the world supports it, or making the step's action tolerate the state it was trying to exclude. If the app genuinely closes the branch off (converting a book to a shelf destroys the chapters a "delete chapter" step acts on), mark the step [`optional()`](steps.md) so the trail may finish without it. Bounding the trail further won't help — the trail is stuck, not long.
 
 ## Runaway trail
 
@@ -59,7 +59,7 @@ Step builder arguments are validated where they're set, so these throw as the jo
 
 | Message | Cause |
 |---|---|
-| `Step "x" needs a minimum of at least 1 run, got 0.` | `repeatable(min: 0)`. Use the default `min: 1`; a step that may run zero times is expressed with `when()`, not `min`. |
+| `Step "x" needs a minimum of at least 0 runs, got -1.` | A negative `repeatable(min: ...)`. Use `min: 0` (or `optional()`) for a step that may never run. |
 | `Step "x" has min 5 greater than max 3.` | `repeatable(max: 3, min: 5)` can never be satisfied. |
 | `Step "x" needs a weight of at least 1, got 0.` | `weight()` is a relative multiplier, so it must be positive. To make a step rarer, raise the others. |
 

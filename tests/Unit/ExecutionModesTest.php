@@ -238,12 +238,94 @@ final class ExecutionModesTest extends TestCase
     }
 
     /** Total executions of a repeatable step across seeds 1-15. */
-    public function test_min_runs_must_be_at_least_one(): void
+    public function test_min_runs_cannot_be_negative(): void
     {
         $this->expectException(InvalidJourneyException::class);
-        $this->expectExceptionMessage('needs a minimum of at least 1 run');
+        $this->expectExceptionMessage('needs a minimum of at least 0 runs, got -1');
 
-        Step::make('walk')->repeatable(max: 5, min: 0);
+        Step::make('walk')->repeatable(max: 5, min: -1);
+    }
+
+    public function test_optional_and_min_zero_both_make_a_step_optional(): void
+    {
+        $this->assertSame(0, Step::make('a')->optional()->minRuns());
+        $this->assertSame(0, Step::make('b')->repeatable(max: 3, min: 0)->minRuns());
+        $this->assertSame(0, Step::make('c')->optional()->repeatable(max: 3)->minRuns(), 'repeatable() keeps an earlier optional().');
+        $this->assertSame(1, Step::make('d')->repeatable(max: 3)->minRuns());
+    }
+
+    public function test_a_step_closed_off_by_another_branch_does_not_deadlock_when_optional(): void
+    {
+        $closedOff = function (bool $optional): Journey {
+            $branch = Step::make('branch')->when(fn ($ctx): bool => ! $ctx->has('closed'));
+
+            return $this->journey([
+                Step::make('close')->act(fn ($ctx): mixed => $ctx->remember('closed', true)),
+                $optional ? $branch->optional() : $branch,
+                Step::make('tail'),
+            ]);
+        };
+
+        /** @var ArrayObject<int, string> $trails */
+        $trails = new ArrayObject;
+
+        // Declared order closes the branch before reaching it; the skip must
+        // carry on to the steps after it, not end the trail there.
+        $this->pending($closedOff(true))->shuffles(20)->onTrail(function (Trail $trail) use ($trails): void {
+            $trails[] = implode(',', $trail->steps());
+        })->run();
+
+        $this->assertSame('close,tail', $trails[0]);
+
+        $this->expectException(JourneyFailedException::class);
+        $this->expectExceptionMessage('Step "branch" is not enabled when reached in declared order');
+        $this->pending($closedOff(false))->shuffles(0)->run();
+    }
+
+    public function test_skipping_an_optional_step_in_declared_order_does_not_skip_other_instances(): void
+    {
+        /** @var ArrayObject<int, list<string>> $trails */
+        $trails = new ArrayObject;
+
+        $closing = $this->journey([
+            Step::make('close')->act(fn ($ctx): mixed => $ctx->remember('closed', true)),
+            Step::make('branch')->when(fn ($ctx): bool => ! $ctx->has('closed'))->optional(),
+        ]);
+        $other = $this->journey([Step::make('first'), Step::make('second')]);
+
+        (new PendingJourney([$closing, $other], fn (Closure $trail) => $trail()))
+            ->shuffles(0)
+            ->onTrail(function (Trail $trail) use ($trails): void {
+                $trails[] = $trail->steps();
+            })
+            ->run();
+
+        // Round robin by position: A's skipped "branch" shares position 1
+        // with B's "second", which must still run.
+        $this->assertSame(['A: close', 'B: first', 'B: second'], $trails[0]);
+    }
+
+    public function test_exhaustive_mode_runs_orderings_that_skip_a_closed_off_optional_step(): void
+    {
+        /** @var ArrayObject<int, string> $orders */
+        $orders = new ArrayObject;
+
+        $journey = $this->journey([
+            Step::make('close')->act(fn ($ctx): mixed => $ctx->remember('closed', true)),
+            Step::make('branch')->when(fn ($ctx): bool => ! $ctx->has('closed'))->optional(),
+            Step::make('tail'),
+        ]);
+
+        $this->pending($journey)->exhaustive()->onTrail(function (Trail $trail) use ($orders): void {
+            $orders[] = implode(',', $trail->steps());
+        })->run();
+
+        // Every permutation is viable; a closed-off "branch" is skipped and
+        // the steps after it in that ordering still run.
+        $this->assertSame(
+            ['close,tail', 'close,tail', 'branch,close,tail', 'branch,tail,close', 'tail,close', 'tail,branch,close'],
+            $orders->getArrayCopy(),
+        );
     }
 
     public function test_min_runs_cannot_exceed_max(): void
