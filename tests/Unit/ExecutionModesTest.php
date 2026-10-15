@@ -262,11 +262,20 @@ final class ExecutionModesTest extends TestCase
             return $this->journey([
                 Step::make('close')->act(fn ($ctx): mixed => $ctx->remember('closed', true)),
                 $optional ? $branch->optional() : $branch,
+                Step::make('tail'),
             ]);
         };
 
-        // Declared order closes the branch before reaching it.
-        $this->pending($closedOff(true))->shuffles(20)->run();
+        /** @var ArrayObject<int, string> $trails */
+        $trails = new ArrayObject;
+
+        // Declared order closes the branch before reaching it; the skip must
+        // carry on to the steps after it, not end the trail there.
+        $this->pending($closedOff(true))->shuffles(20)->onTrail(function (Trail $trail) use ($trails): void {
+            $trails[] = implode(',', $trail->steps());
+        })->run();
+
+        $this->assertSame('close,tail', $trails[0]);
 
         $this->expectException(JourneyFailedException::class);
         $this->expectExceptionMessage('Step "branch" is not enabled when reached in declared order');
@@ -281,13 +290,19 @@ final class ExecutionModesTest extends TestCase
         $journey = $this->journey([
             Step::make('close')->act(fn ($ctx): mixed => $ctx->remember('closed', true)),
             Step::make('branch')->when(fn ($ctx): bool => ! $ctx->has('closed'))->optional(),
+            Step::make('tail'),
         ]);
 
         $this->pending($journey)->exhaustive()->onTrail(function (Trail $trail) use ($orders): void {
             $orders[] = implode(',', $trail->steps());
         })->run();
 
-        $this->assertSame(['close', 'branch,close'], $orders->getArrayCopy());
+        // Every permutation is viable; a closed-off "branch" is skipped and
+        // the steps after it in that ordering still run.
+        $this->assertSame(
+            ['close,tail', 'close,tail', 'branch,close,tail', 'branch,tail,close', 'tail,close', 'tail,branch,close'],
+            $orders->getArrayCopy(),
+        );
     }
 
     public function test_min_runs_cannot_exceed_max(): void
