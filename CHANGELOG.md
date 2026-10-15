@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-15
+
+Driven by journey-testing a large real application (BookStack), which surfaced journeys the 1.0 step model could not express. Every 1.0 seed and `RUNABOUT_TRAIL` artifact replays unchanged.
+
 ### Added
 
 - `Step::optional()`, and `repeatable(min: 0)`: a step the trail may finish without. Real apps have branches that close each other off — converting a BookStack book to a shelf destroys its chapters, so a "delete chapter" step can never run afterwards — and a required step there deadlocked every trail that took the other branch first. An optional step that is not eligible when reached in declared order or in an exhaustive ordering is skipped instead of failing the trail.
