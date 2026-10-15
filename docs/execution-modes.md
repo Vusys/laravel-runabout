@@ -29,6 +29,10 @@ The default mode. Runs the canonical (declared) order once, then `$count` seeded
 
 Biases the picker toward repeatable steps (5× by default). This is the **idempotency hunter**: re-running steps is how replace-logic, counter, and quota bugs surface, and the bias finds them in far fewer trails than uniform shuffling. Combine it with `shuffles()` to set how many biased trails to run.
 
+## `minLength(int $executions)`
+
+Keeps each shuffled trail going until it holds at least `$executions` step executions, not just until every step's minimum is met. A trail with no eligible step left ends early instead of failing. Use it with journeys made mostly of [`optional()`](steps.md) steps: without it, a shuffled trail stops as soon as its few required steps have run, and the shuffles collapse into a handful of short, repeated orderings. The canonical trail is unaffected. The default, 0, leaves trails, and therefore existing seeds, unchanged.
+
 ## `exhaustive(int $limit = 720)`
 
 Runs **every** valid ordering rather than sampling, and throws if the journey has more than `$limit` orderings (default 720). Suits small journeys where you'd rather prove every ordering than hope the seeds covered them. Not available for [interleaved](interleaving.md) journeys.

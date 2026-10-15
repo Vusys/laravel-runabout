@@ -32,6 +32,8 @@ final class PendingJourney
 
     private int $repeatBias = 1;
 
+    private int $minLength = 0;
+
     private ?int $exhaustiveLimit = null;
 
     /** @var array<array-key, mixed>|null A seed + token list to replay verbatim instead of shuffling. */
@@ -109,6 +111,21 @@ final class PendingJourney
     public function repeatHeavy(int $bias = 5): self
     {
         $this->repeatBias = max(1, $bias);
+
+        return $this;
+    }
+
+    /**
+     * Keep shuffled trails going until they hold at least $executions step
+     * executions, not just until every step's minimum is met — or until no
+     * step is eligible. Journeys made mostly of optional() steps otherwise
+     * stop as soon as their few required steps have run, and the shuffles
+     * collapse into a handful of short, repeated orderings. Zero or less
+     * means no minimum length.
+     */
+    public function minLength(int $executions): self
+    {
+        $this->minLength = $executions;
 
         return $this;
     }
@@ -308,7 +325,7 @@ final class PendingJourney
 
         try {
             ($this->wrapper)(function () use ($runner, $seed, $shuffle, &$trail): void {
-                $trail = $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias);
+                $trail = $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias, $this->minLength);
             });
         } catch (JourneyFailedException $failure) {
             // A failure has already cost a red build; spending a few seconds to

@@ -55,15 +55,15 @@ final class JourneyRunner
      *
      * @throws JourneyFailedException
      */
-    public function runInterleaved(array $journeys, int $seed, bool $shuffle = true, ?HttpDriver $http = null, int $repeatBias = 1): Trail
+    public function runInterleaved(array $journeys, int $seed, bool $shuffle = true, ?HttpDriver $http = null, int $repeatBias = 1, int $minLength = 0): Trail
     {
         $mode = $shuffle ? ($repeatBias > 1 ? 'repeat-heavy' : 'shuffled') : 'canonical';
         $instances = $this->instances($journeys, $seed, $http);
         $picker = SeedSchema::picker($seed);
 
-        return $this->trail($instances, $seed, $mode, function (Trail $trail) use ($instances, $shuffle, $picker, $seed, $repeatBias): void {
+        return $this->trail($instances, $seed, $mode, function (Trail $trail) use ($instances, $shuffle, $picker, $seed, $repeatBias, $minLength): void {
             $shuffle
-                ? $this->runShuffled($instances, $picker, $trail, $seed, $repeatBias)
+                ? $this->runShuffled($instances, $picker, $trail, $seed, $repeatBias, $minLength)
                 : $this->runCanonical($instances, $trail, $seed);
         });
     }
@@ -272,17 +272,23 @@ final class JourneyRunner
     /**
      * @param  non-empty-list<JourneyInstance>  $instances
      */
-    private function runShuffled(array $instances, Randomizer $picker, Trail $trail, int $seed, int $repeatBias): void
+    private function runShuffled(array $instances, Randomizer $picker, Trail $trail, int $seed, int $repeatBias, int $minLength = 0): void
     {
         $ticks = 0;
         $minTotal = array_sum(array_map(
             fn (JourneyInstance $instance): int => array_sum(array_map(fn (Step $step): int => $step->minRuns(), $instance->steps)),
             $instances,
         ));
-        $maxTicks = max(100, $minTotal * self::TICK_MULTIPLIER);
+        $maxTicks = max(100, max($minTotal, $minLength) * self::TICK_MULTIPLIER);
 
-        while (($pending = $this->pending($instances)) !== []) {
+        // Run until every minimum is met and the trail is at least $minLength
+        // long; past the minimums, a trail with nothing eligible simply ends.
+        while (($pending = $this->pending($instances)) !== [] || $ticks < $minLength) {
             $enabled = $this->enabled($instances);
+
+            if ($enabled === [] && $pending === []) {
+                return;
+            }
 
             if ($enabled === []) {
                 throw new InvalidJourneyException(sprintf(
