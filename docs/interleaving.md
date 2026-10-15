@@ -12,7 +12,7 @@ Each instance keeps its own context — remembered values, run history, actors �
 
 The canonical trail — the one that always runs first — is itself an interleaving: round robin across instances by declared position (A's first step, B's first step, A's second, and so on), not each instance's whole journey run back to back. That keeps every instance's own declared order intact while making sure a step guarded by a condition on *another* instance's state (`only read B's records if B has any`) can already be enabled the first time the canonical trail reaches it.
 
-Trail lines carry instance labels, and a violation names both the invariant's instance and the acting step's — here community A's invariant catching community B's very first post:
+Trail lines carry instance labels (`A`, `B`, … in the order passed to `interleave()`, continuing `AA`, `AB`, … past `Z`), and a violation names both the invariant's instance and the acting step's — here community A's invariant catching community B's very first post:
 
 ```
    1. A: found community
