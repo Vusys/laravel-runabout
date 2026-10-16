@@ -152,7 +152,7 @@ final class JourneyRunner
      * instance's seed streams and appear in replay artifacts, so the first 26
      * must stay the single letters they have always been.
      */
-    private function instanceLabel(int $index): string
+    public static function instanceLabel(int $index): string
     {
         $label = '';
 
@@ -174,7 +174,7 @@ final class JourneyRunner
         $instances = [];
 
         foreach ($journeys as $i => $journey) {
-            $label = $labelled ? $this->instanceLabel($i) : null;
+            $label = $labelled ? self::instanceLabel($i) : null;
 
             // Placeholder stream: the runner installs a real per-execution
             // stream before any step runs, so this is only ever consulted by a

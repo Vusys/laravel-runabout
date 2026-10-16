@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout;
 
+use Vusys\Runabout\Execution\JourneyRunner;
+
 /**
  * Aggregates completed trails into a coverage summary: how often each step
  * ran, how many distinct orderings the run explored, and which orderings of
@@ -32,6 +34,47 @@ final class TrailCoverage
 
     /** @var array<string, int> "before\x00after" => trails where some run of before preceded some run of after */
     private array $pairs = [];
+
+    /** @var array<string, string> "before\x00after" => itself, for pairs the journeys' after() constraints make impossible */
+    private array $impossible = [];
+
+    /**
+     * @param  list<Journey>  $journeys  The journeys whose trails are recorded, in run order. A step can
+     *                                   never run before a once-only step it is (transitively) after(),
+     *                                   so those pairs are left out of the unseen list. Steps of different
+     *                                   interleaved instances are never constrained by each other.
+     */
+    public function __construct(array $journeys = [])
+    {
+        foreach ($journeys as $index => $journey) {
+            $label = count($journeys) > 1 ? JourneyRunner::instanceLabel($index).': ' : '';
+            $steps = [];
+
+            foreach ($journey->steps() as $step) {
+                $steps[$step->name()] = $step;
+            }
+
+            foreach ($steps as $name => $step) {
+                $pending = $step->dependencies();
+                $ancestors = [];
+
+                while ($pending !== []) {
+                    $dependency = array_pop($pending);
+
+                    if (! isset($ancestors[$dependency]) && isset($steps[$dependency])) {
+                        $ancestors[$dependency] = $dependency;
+                        array_push($pending, ...$steps[$dependency]->dependencies());
+
+                        // A repeatable dependency can run again after $name.
+                        if (! $steps[$dependency]->isRepeatable()) {
+                            $pair = $label.$name.self::PAIR_GLUE.$label.$dependency;
+                            $this->impossible[$pair] = $pair;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     public function record(Trail $trail): void
     {
@@ -93,9 +136,10 @@ final class TrailCoverage
 
     /**
      * Ordered pairs of distinct steps never observed in that order in any
-     * trail. Pairs constrained by after()/when() are expected here; an
-     * unconstrained pair on this list means the shuffles never explored that
-     * ordering — the run needs more (or different) seeds to claim it did.
+     * trail, less the pairs after() makes impossible. Pairs closed off by
+     * when() are expected here; an unconstrained pair on this list means the
+     * shuffles never explored that ordering — the run needs more (or
+     * different) seeds to claim it did.
      *
      * @return list<array{string, string}>
      */
@@ -106,7 +150,9 @@ final class TrailCoverage
 
         foreach ($steps as $before) {
             foreach ($steps as $after) {
-                if ($before !== $after && ! isset($this->pairs[$before.self::PAIR_GLUE.$after])) {
+                $pair = $before.self::PAIR_GLUE.$after;
+
+                if ($before !== $after && ! isset($this->pairs[$pair]) && ! isset($this->impossible[$pair])) {
                     $unseen[] = [$before, $after];
                 }
             }
@@ -151,13 +197,17 @@ final class TrailCoverage
             }
         }
 
-        $possible = count($this->runs) * (count($this->runs) - 1);
+        $excluded = count(array_filter(
+            $this->impossible,
+            fn (string $pair): bool => array_diff(explode(self::PAIR_GLUE, $pair), array_keys($this->runs)) === [],
+        ));
+        $possible = count($this->runs) * (count($this->runs) - 1) - $excluded;
         $unseen = $this->unseenPairs();
 
         if ($unseen === []) {
-            $lines[] = sprintf('All %d orderings of step pairs observed.', $possible);
+            $lines[] = sprintf('All %d orderings of step pairs observed%s.', $possible, $excluded > 0 ? sprintf(' (%d excluded by after())', $excluded) : '');
         } else {
-            $lines[] = sprintf('Orderings of step pairs never observed (%d of %d):', count($unseen), $possible);
+            $lines[] = sprintf('Orderings of step pairs never observed (%d of %d%s):', count($unseen), $possible, $excluded > 0 ? sprintf(', %d excluded by after()', $excluded) : '');
 
             foreach (array_slice($unseen, 0, 10) as [$before, $after]) {
                 $lines[] = sprintf('  "%s" before "%s"', $before, $after);
