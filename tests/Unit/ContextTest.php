@@ -188,7 +188,7 @@ final class ContextTest extends TestCase
 
         $ctx = new Context(new Randomizer(new Mt19937(1)), new HttpDriver(
             authenticate: function ($user) use (&$authenticated): void {
-                $authenticated[] = $user->getAuthIdentifier();
+                $authenticated[] = $user?->getAuthIdentifier();
             },
             json: fn (): TestResponse => $response,
             form: fn (): TestResponse => $response,

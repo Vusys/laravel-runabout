@@ -6,6 +6,7 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ### Added
 
+- `PendingJourney::freshActors()` reloads each actor's user before every request, as production loads it from the session. An actor reuses one user instance for the whole run, so a permissions list that the app cached on the instance went stale. An admin granted a member's role a permission, but the app still refused the member's next request. In the reverse case, a revoked user keeps acting. Runabout reloads a saved Eloquent user with `fresh()`, at one query per request. A deleted user makes its requests as a guest. The option is off by default, so outcomes and trails do not change. ([#51](https://github.com/Vusys/laravel-runabout/issues/51))
 - Actors can log in on a named guard: `'admin' => [$user, 'admin']` in `actors()`, or `$ctx->actingAs($user, 'admin', guard: 'admin')`. Before, every actor logged in on the default guard. In an app with a separate `admin` guard, the app redirected an admin actor to login. A call to `actingAs($admin, 'admin')` by hand made `admin` the default guard for the rest of the test. A later storefront step then created a cart for the admin. Runabout now sets a named-guard actor on its guard only. Once a named guard is in play, Runabout resets the default guard before each request. It also logs out the other actors' guards, as separate production sessions would. Journeys whose actors all use the default guard behave as before. ([#53](https://github.com/Vusys/laravel-runabout/issues/53))
 
 ## [1.2.0] - 2026-10-16
