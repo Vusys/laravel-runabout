@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-16
+
+Failure reports that need less decoding: canonical failures are shrunk, the output has fewer repeated messages and Runabout frames, and a shrunk trail names what each `pick()` picked. Every 1.1 seed and `RUNABOUT_TRAIL` artifact replays unchanged.
+
 ### Changed
 
 - A failure in the canonical (declared) order is now shrunk like a shuffled one, and replays as a `RUNABOUT_TRAIL` artifact. The declared order runs every step, so it is often the first trail to fail, and a 7-step canonical failure used to leave the reader to bisect it by hand. The headline reads `Shrunk the canonical order from N executions to M`, and the last line says to re-run the journey for the full trail, since a seed would replay a shuffled trail instead. Trails and seeds are unchanged; `RUNABOUT_SHRINK=0` still turns shrinking off. ([#41](https://github.com/Vusys/laravel-runabout/issues/41))
