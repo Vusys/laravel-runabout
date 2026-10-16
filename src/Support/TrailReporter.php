@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Support;
 
 use Closure;
+use Vusys\Runabout\Journey;
 use Vusys\Runabout\Trail;
 use Vusys\Runabout\TrailCoverage;
 
@@ -17,10 +18,14 @@ use Vusys\Runabout\TrailCoverage;
  */
 final class TrailReporter
 {
-    /** A fresh collector when coverage is enabled, null when it is off. */
-    public static function coverage(): ?TrailCoverage
+    /**
+     * A fresh collector when coverage is enabled, null when it is off.
+     *
+     * @param  list<Journey>  $journeys
+     */
+    public static function coverage(array $journeys): ?TrailCoverage
     {
-        return Environment::coverageEnabled() ? new TrailCoverage : null;
+        return Environment::coverageEnabled() ? new TrailCoverage($journeys) : null;
     }
 
     /**

@@ -286,7 +286,7 @@ final class PendingJourney
     {
         $this->hideOwnFramesFromPhpunit();
 
-        $coverage = TrailReporter::coverage();
+        $coverage = TrailReporter::coverage($this->journeys);
 
         if ($coverage instanceof TrailCoverage) {
             $this->onTrail($coverage->record(...));

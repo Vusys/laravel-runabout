@@ -218,6 +218,7 @@ public function isOpaqueAt(int $index): bool
 Aggregates trails into the summary `RUNABOUT_COVERAGE=1` prints. See [Collecting coverage yourself](observability.md#collecting-coverage-yourself-trailcoverage).
 
 ```php
+public function __construct(array $journeys = [])                  // list<Journey>: leaves out pairs their after() forbids
 public function record(Trail $trail): void                         // pass to onTrail()
 public function trails(): int
 public function distinctOrderings(): int
