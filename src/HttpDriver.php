@@ -6,6 +6,7 @@ namespace Vusys\Runabout;
 
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -17,21 +18,30 @@ use Symfony\Component\HttpFoundation\Response;
 final readonly class HttpDriver
 {
     /**
-     * @param  Closure(Authenticatable, ?string): void  $authenticate  Authenticates the user on the named guard, or the default one for null.
+     * @param  Closure(?Authenticatable, ?string): void  $authenticate  Authenticates the user on the named guard, or the default one for null. A null user is a guest.
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $json
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $form
      * @param  Closure(array<string, mixed>): void|null  $session  Applies session data to the next request; null when the test case exposes no session.
+     * @param  bool  $freshUsers  Reload a saved Eloquent user before each request, as production resolves it from the session.
      */
     public function __construct(
         private Closure $authenticate,
         private Closure $json,
         private Closure $form,
         private ?Closure $session = null,
+        private bool $freshUsers = false,
     ) {}
+
+    /** A copy of this driver that reloads a saved Eloquent user before each request. */
+    public function withFreshUsers(): self
+    {
+        return new self($this->authenticate, $this->json, $this->form, $this->session, true);
+    }
 
     public function authenticate(Authenticatable $user, ?string $guard = null): void
     {
-        ($this->authenticate)($user, $guard);
+        // A deleted user reloads as null, and the request goes out as a guest.
+        ($this->authenticate)($this->freshUsers && $user instanceof Model && $user->exists ? $user->fresh() : $user, $guard);
     }
 
     /**

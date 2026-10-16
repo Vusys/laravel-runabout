@@ -76,6 +76,28 @@ Once a named guard is in play, every actor request also starts the way a product
 
 Journeys whose actors all use the default guard behave as before.
 
+## Reloading users before each request
+
+An actor holds one user instance for the whole run, as Laravel's `actingAs()` does. In production each request loads the user from the session afresh. So these go stale:
+
+- relations loaded on the instance
+- caches the app keeps on the model
+- attributes another actor has since changed
+
+Every trail and shrink replay also shares the instance, because the per-trail rollback resets rows, not objects in memory.
+
+This matters most in journeys, because actors change each other's state over many requests. For example, an admin grants a member's role a permission. The app still checks the member's next request against the permission list it cached on the instance before the grant. Call `freshActors()` to reload the user before every actor request:
+
+```php
+$this->journey(PermissionsJourney::class)->freshActors()->run();
+```
+
+- Runabout reloads a saved Eloquent user with `fresh()`, at one query per request. If the user no longer exists, the actor sends its requests as a guest, as production would.
+- Runabout authenticates an unsaved user, or one that isn't an Eloquent model, as it is.
+- `Actor::user()` still returns the instance that you registered the actor with.
+
+It is off by default, so existing journeys keep the outcomes they had. It can change a journey's outcome, never its trails.
+
 ## Carrying session / tenancy state
 
 If your app carries tenancy (or anything else) in the session, attach it to the actor and it rides along with every request that actor makes — driving the full middleware stack, no per-request session juggling:

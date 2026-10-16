@@ -147,6 +147,10 @@ So `RUNABOUT_SEED` has no effect on a journey whose test already calls `exhausti
 
 Also worth knowing: a seeded replay runs **one** trail, not the canonical order plus shuffles. If you're replaying and seeing a single trail, that's correct.
 
+## An actor still has permissions another actor revoked
+
+Or it lacks permissions another actor granted. The actor reuses one user instance for the whole run. A permission list that the app cached on the instance, or a relation that it loaded, predates the change. Call [`freshActors()`](actors-http.md#reloading-users-before-each-request) to reload the user before each request. You then do not need to clear the cache in `aroundStep()`.
+
 ## State leaks between trails
 
 Every trail is reset — by default a transaction rolled back on the default connection. Anything created before the run is therefore gone after the first trail completes.

@@ -55,7 +55,7 @@ trait RunsJourneys
         $named = false;
 
         return new HttpDriver(
-            authenticate: function (Authenticatable $user, ?string $guard) use (&$guards, &$default, &$named): void {
+            authenticate: function (?Authenticatable $user, ?string $guard) use (&$guards, &$default, &$named): void {
                 $default ??= Auth::getDefaultDriver();
                 $guards[$guard ?? $default] = $guard ?? $default;
                 $named = $named || $guard !== null;
@@ -76,7 +76,13 @@ trait RunsJourneys
                     }
                 }
 
-                if ($guard === null) {
+                if (! $user instanceof Authenticatable) {
+                    $resolved = Auth::guard($guard);
+
+                    if (method_exists($resolved, 'forgetUser')) {
+                        $resolved->forgetUser();
+                    }
+                } elseif ($guard === null) {
                     $this->actingAs($user);
                 } else {
                     Auth::guard($guard)->setUser($user);

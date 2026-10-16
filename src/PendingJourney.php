@@ -61,7 +61,7 @@ final class PendingJourney
     public function __construct(
         Journey|array $journey,
         private Closure $wrapper,
-        private readonly ?HttpDriver $http = null,
+        private ?HttpDriver $http = null,
     ) {
         $journeys = is_array($journey) ? $journey : [$journey];
 
@@ -101,6 +101,21 @@ final class PendingJourney
     public function trail(array|string $artifact): self
     {
         $this->trailArtifact = is_string($artifact) ? TrailArtifact::decode($artifact) : $artifact;
+
+        return $this;
+    }
+
+    /**
+     * Authenticate every actor request as a freshly loaded user, as production
+     * resolves it from the session. By default an actor reuses one user
+     * instance for the whole run, so relations and caches loaded on it go
+     * stale when another actor changes them. A deleted user's requests go out
+     * as a guest. Costs one query per request; users that aren't saved
+     * Eloquent models are authenticated as they are.
+     */
+    public function freshActors(): self
+    {
+        $this->http = $this->http?->withFreshUsers();
 
         return $this;
     }
