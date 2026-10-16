@@ -154,8 +154,12 @@ final class Trail
 
             // Value-shrunk executions show the minimal drawn values, so the
             // trail reads like a hand-written test instead of a seed to re-derive.
+            // A pick() also names what it picked, so "[drew 1 → Order #140]" needs no replay to decode.
             if (isset($pinned[$index])) {
-                $label .= sprintf(' [drew %s]', implode(', ', array_map(strval(...), $pinned[$index])));
+                $label .= sprintf(' [drew %s]', implode(', ', array_map(
+                    fn (Draw $draw): string => $draw->picked === null ? (string) $draw->value : sprintf('%d → %s', $draw->value, $draw->picked),
+                    $this->draws[$index],
+                )));
             }
 
             $lines[] = sprintf('%s %2d. %s', $marker, $index + 1, $label);

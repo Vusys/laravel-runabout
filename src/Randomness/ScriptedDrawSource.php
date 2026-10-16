@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout\Randomness;
 
+use Closure;
 use Random\Randomizer;
 
 /**
@@ -31,7 +32,7 @@ final class ScriptedDrawSource implements DrawSource
         private readonly Randomizer $fallback,
     ) {}
 
-    public function int(int $min, int $max): int
+    public function int(int $min, int $max, ?Closure $describe = null): int
     {
         if ($this->cursor < count($this->script)) {
             $value = max($min, min($max, $this->script[$this->cursor]));
@@ -40,7 +41,7 @@ final class ScriptedDrawSource implements DrawSource
             $value = $this->fallback->getInt($min, $max);
         }
 
-        $this->draws[] = new Draw($min, $max, $value);
+        $this->draws[] = new Draw($min, $max, $value, $describe instanceof Closure ? $describe($value) : null);
 
         return $value;
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout\Randomness;
 
+use Closure;
 use Random\Randomizer;
 
 /**
@@ -21,8 +22,12 @@ use Random\Randomizer;
  */
 interface DrawSource
 {
-    /** A bounded integer draw — both randomInt() and pick()'s index go through here. */
-    public function int(int $min, int $max): int;
+    /**
+     * A bounded integer draw — both randomInt() and pick()'s index go through here.
+     *
+     * @param  (Closure(int): ?string)|null  $describe  Names what the drawn value picked, for the trail listing.
+     */
+    public function int(int $min, int $max, ?Closure $describe = null): int;
 
     /** The raw randomizer escape hatch; taking it marks this execution value-opaque. */
     public function randomizer(): Randomizer;

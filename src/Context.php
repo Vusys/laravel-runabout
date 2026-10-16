@@ -7,11 +7,13 @@ namespace Vusys\Runabout;
 use Closure;
 use DateTimeInterface;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Testing\TestResponse;
 use Random\Randomizer;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
+use UnitEnum;
 use Vusys\Runabout\Execution\DeferredStack;
 use Vusys\Runabout\Randomness\DrawSource;
 use Vusys\Runabout\Randomness\StreamDrawSource;
@@ -189,7 +191,21 @@ final class Context
      */
     public function pick(array $options): mixed
     {
-        return $options[$this->source->int(0, count($options) - 1)];
+        return $options[$this->source->int(0, count($options) - 1, fn (int $index): ?string => $this->describePick($options[$index]))];
+    }
+
+    /** A few characters naming a picked option for the trail listing, or null when it has no short form. */
+    private function describePick(mixed $option): ?string
+    {
+        return match (true) {
+            $option instanceof Model => class_basename($option).(is_scalar($option->getKey()) ? ' #'.$option->getKey() : ''),
+            $option instanceof UnitEnum => class_basename($option).'::'.$option->name,
+            is_string($option) => json_encode(strlen($option) > 24 ? substr($option, 0, 23).'…' : $option, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null,
+            is_int($option), is_float($option) => (string) $option,
+            is_bool($option) => $option ? 'true' : 'false',
+            $option === null => 'null',
+            default => null,
+        };
     }
 
     /**

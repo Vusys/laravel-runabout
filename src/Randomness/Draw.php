@@ -16,5 +16,7 @@ final readonly class Draw
         public int $min,
         public int $max,
         public int $value,
+        /** What the draw picked, for the trail listing ("Order #140"); null when it has no short form. */
+        public ?string $picked = null,
     ) {}
 }

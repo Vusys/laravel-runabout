@@ -60,6 +60,14 @@ Shrinking runs in two passes:
 
 That is why the deal amounts above land at `50` and `51` (one lower and they'd tie, and the bug would vanish) and the noise name-suffix draws collapse to `1` — the trail reads like a hand-written test (`open opportunity [drew 1, 50]`) instead of a seed to go re-derive.
 
+A `pick()` draw also names what it picked, so a step that chooses which record to act on says which one:
+
+```
+   4. invoice [drew 1 → Order #140, 0 → LineItem #212, 1]
+```
+
+Eloquent models show their class basename and key, enums show `PostStatus::Draft`, and scalars show their value (strings quoted, cut to 24 characters). Any other option shows only its index, as does every `randomInt()` draw. Model keys come from the database, so on engines whose auto-increment survives the per-trail rollback (MySQL) the key in a replay can differ from the one in the original report. The index is what replays; the name is only there to read.
+
 ## Replaying a shrunk trail: `RUNABOUT_TRAIL`
 
 `RUNABOUT_TRAIL` replays that exact shrunk trail — order and data both — which a bare seed cannot, because a shrunk or repeat-heavy trail is no longer what the seed alone produces:
