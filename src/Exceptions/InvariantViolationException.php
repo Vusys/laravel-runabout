@@ -25,7 +25,8 @@ final class InvariantViolationException extends RuntimeException
     public static function make(string $invariant, string $step, Throwable $cause): self
     {
         return new self(
-            sprintf('Invariant "%s" violated after step "%s": %s', $invariant, $step, $cause->getMessage()),
+            // The cause's message is left out: PHPUnit prints the cause right below, and JourneyFailedException's headline already joins the two.
+            sprintf('Invariant "%s" violated after step "%s".', $invariant, $step),
             $invariant,
             $step,
             $cause,

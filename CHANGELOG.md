@@ -7,6 +7,7 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 ### Changed
 
 - A failure in the canonical (declared) order is now shrunk like a shuffled one, and replays as a `RUNABOUT_TRAIL` artifact. The declared order runs every step, so it is often the first trail to fail, and a 7-step canonical failure used to leave the reader to bisect it by hand. The headline reads `Shrunk the canonical order from N executions to M`, and the last line says to re-run the journey for the full trail, since a seed would replay a shuffled trail instead. Trails and seeds are unchanged; `RUNABOUT_SHRINK=0` still turns shrinking off. ([#41](https://github.com/Vusys/laravel-runabout/issues/41))
+- Failure output is about half as long. PHPUnit printed the failed assertion's message three times, under three stack traces made mostly of Runabout's own frames, so the line in the journey that failed was easy to miss. Runabout now adds its `src/` directory to PHPUnit's trace exclude list, as PHPUnit does for vendor code, and `InvariantViolationException`'s message names the invariant and step without repeating its cause. The `JourneyFailedException` message is unchanged, the exception chain is unchanged, and `getTrace()` still returns every frame. ([#43](https://github.com/Vusys/laravel-runabout/issues/43))
 
 ## [1.1.0] - 2026-10-15
 
