@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-17
+
+Actors that behave more like production users, and a coverage report without false gaps. Actors can log in on a named guard, `freshActors()` reloads their users before each request, and `RUNABOUT_COVERAGE` leaves out pairs `after()` makes impossible. Every 1.2 seed and `RUNABOUT_TRAIL` artifact replays unchanged.
+
 ### Added
 
 - `PendingJourney::freshActors()` reloads each actor's user before every request, as production loads it from the session. An actor reuses one user instance for the whole run, so a permissions list that the app cached on the instance went stale. An admin granted a member's role a permission, but the app still refused the member's next request. In the reverse case, a revoked user keeps acting. Runabout reloads a saved Eloquent user with `fresh()`, at one query per request. A deleted user makes its requests as a guest. The option is off by default, so outcomes and trails do not change. ([#51](https://github.com/Vusys/laravel-runabout/issues/51))
