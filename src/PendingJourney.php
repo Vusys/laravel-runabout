@@ -7,6 +7,7 @@ namespace Vusys\Runabout;
 use Closure;
 use Generator;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Util\ExcludeList;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Exceptions\OrderNotViableException;
@@ -26,6 +27,8 @@ use Vusys\Runabout\Support\TrailReporter;
  */
 final class PendingJourney
 {
+    private static bool $framesHidden = false;
+
     private int $shuffles = 10;
 
     private ?int $seed = null;
@@ -266,6 +269,8 @@ final class PendingJourney
      */
     public function run(): void
     {
+        $this->hideOwnFramesFromPhpunit();
+
         $coverage = TrailReporter::coverage();
 
         if ($coverage instanceof TrailCoverage) {
@@ -277,6 +282,24 @@ final class PendingJourney
         if ($coverage instanceof TrailCoverage) {
             TrailReporter::printCoverage($this->names(), $coverage);
         }
+    }
+
+    /**
+     * A failure is a chain of wrappers around the user's assertion, and PHPUnit
+     * prints every link's trace. Excluding this package's frames, as PHPUnit
+     * already does for vendor code, leaves each trace pointing at the journey
+     * and test lines. getTrace() itself is untouched.
+     *
+     * @infection-ignore-all Runs once per process, so only the suite's first journey test covers it, and Infection runs only that test.
+     */
+    private function hideOwnFramesFromPhpunit(): void
+    {
+        if (self::$framesHidden || ! class_exists(ExcludeList::class)) {
+            return;
+        }
+
+        ExcludeList::addDirectory(__DIR__);
+        self::$framesHidden = true;
     }
 
     private function execute(): void

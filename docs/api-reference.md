@@ -233,7 +233,7 @@ All under `Vusys\Runabout\Exceptions\`.
 | Exception | Meaning |
 |---|---|
 | `JourneyFailedException` | A trail failed. Carries the failing `trail()` and renders the trail listing, seed, and replay line. Wraps the original assertion or invariant error as its `previous`. |
-| `InvariantViolationException` | An invariant threw. Exposes readonly `$invariant` and `$step` naming both sides. Surfaces as the `previous` of a `JourneyFailedException`. |
+| `InvariantViolationException` | An invariant threw. Exposes readonly `$invariant` and `$step` naming both sides. Surfaces as the `previous` of a `JourneyFailedException`, with the thrown assertion as its own `previous`. Its message names the invariant and step only; the `JourneyFailedException` message adds the cause's. |
 | `InvalidJourneyException` | The journey definition itself is broken — duplicate names, unknown `after()` target, deadlock, runaway, an `aroundStep()` that didn't run the execution. See [Troubleshooting](troubleshooting.md). |
 | `OrderNotViableException` | Internal. A forced order reached a step that wasn't eligible; the ordering is skipped rather than failed. |
 

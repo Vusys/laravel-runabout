@@ -73,6 +73,16 @@ final class ExceptionsAndSignatureMutationTest extends TestCase
         $this->assertSame($trail, $exception->trail());
     }
 
+    public function test_wrap_joins_an_invariant_violation_with_its_cause_message(): void
+    {
+        $trail = new Trail(seed: 1, mode: 'canonical');
+        $trail->record(null, 'checkout', 1);
+
+        $exception = JourneyFailedException::wrap('SoloJourney', $trail, InvariantViolationException::make('books balance', 'checkout', new RuntimeException('drifted')));
+
+        $this->assertStringEndsWith("\n".'Invariant "books balance" violated after step "checkout": drifted', $exception->getMessage());
+    }
+
     // -- JourneyFailedException::shrunk() --------------------------------
 
     public function test_shrunk_composes_the_headline_before_the_full_trail_replay_hint(): void
@@ -172,7 +182,7 @@ final class ExceptionsAndSignatureMutationTest extends TestCase
         $cause = new RuntimeException('drifted');
         $exception = InvariantViolationException::make('books balance', 'checkout', $cause);
 
-        $this->assertSame('Invariant "books balance" violated after step "checkout": drifted', $exception->getMessage());
+        $this->assertSame('Invariant "books balance" violated after step "checkout".', $exception->getMessage(), 'PHPUnit prints the cause right below, so the wrapper must not repeat it.');
         $this->assertSame('books balance', $exception->invariant);
         $this->assertSame('checkout', $exception->step);
         $this->assertSame($cause, $exception->getPrevious());

@@ -19,6 +19,8 @@ Replay with RUNABOUT_SEED=923206350.
 
 The output names the mode and seed, prints the full trail with the failing step marked, states which invariant (or assertion) failed and why, and gives you the exact command to replay it.
 
+Below that, PHPUnit prints the exception's causes: the `InvariantViolationException` naming the invariant and step, then your assertion with its comparison diff. Runabout's own frames are left out of those stack traces, the way PHPUnit already leaves out vendor code, so each trace points at lines in your journey and test. The first frame under the assertion is the line that failed.
+
 ## Replaying by seed
 
 ```bash

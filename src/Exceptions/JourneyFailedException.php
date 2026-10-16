@@ -27,7 +27,7 @@ final class JourneyFailedException extends RuntimeException
             $trail->seed(),
             $at,
             $trail->describe(),
-            $cause->getMessage(),
+            self::reason($cause),
         );
 
         // The canonical order reproduces by simply running again; a seeded
@@ -79,5 +79,13 @@ final class JourneyFailedException extends RuntimeException
     public function trail(): Trail
     {
         return $this->trail;
+    }
+
+    /** An invariant violation leaves its cause's message out (PHPUnit prints the cause below it), so the headline joins the two. */
+    private static function reason(Throwable $cause): string
+    {
+        return $cause instanceof InvariantViolationException
+            ? sprintf('Invariant "%s" violated after step "%s": %s', $cause->invariant, $cause->step, $cause->getPrevious()?->getMessage())
+            : $cause->getMessage();
     }
 }
