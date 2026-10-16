@@ -29,7 +29,7 @@ re-runs that exact trail — same order, same voters, same values — until you'
 
 ## Automatic shrinking
 
-A seed reproduces a failing trail, but a repeat-heavy trail that fails on execution 23 hands you 23 steps to read when perhaps four matter. So when a shuffled or repeat-heavy trail fails, Runabout automatically minimises it — removing executions that don't change the outcome — and leads the failure output with the shortest trail that still fails *the same way*:
+A seed reproduces a failing trail, but a repeat-heavy trail that fails on execution 23 hands you 23 steps to read when perhaps four matter. So when a canonical, shuffled or repeat-heavy trail fails, Runabout automatically minimises it — removing executions that don't change the outcome — and leads the failure output with the shortest trail that still fails *the same way*:
 
 ```
 Shrunk from 13 executions to 3 (49 replays):
@@ -44,6 +44,10 @@ Replay the full 13-execution trail with RUNABOUT_SEED=1351231025.
 ```
 
 When every execution turns out to be needed but drawn values could still be minimised, the headline says so instead: `Shrunk drawn values; all 2 executions are needed (12 replays):`.
+
+A failure in the canonical (declared) order is shrunk the same way, because the declared order is often the first trail to fail and runs every step. Its headline reads `Shrunk the canonical order from 7 executions to 3 (…):`, and the last line says `Re-run the journey to reproduce the full 7-execution trail.` instead of giving a seed, because a seed replays a shuffled trail rather than the canonical one. The shrunk trail replays with `RUNABOUT_TRAIL` like any other.
+
+Each candidate is a full replay of the journey, so on slow HTTP journeys shrinking costs real time (a 10-step trail can take 30-odd replays). Set `RUNABOUT_SHRINK=0` when you only want the raw failure.
 
 "The same way" is exact: same exception class plus the invariant's (or failing step's) name, so shrinking never quietly swaps the reported bug for a different one it happened to trip while removing steps. The search is deterministic and budget-capped — `RUNABOUT_SHRINK=0` turns it off, `RUNABOUT_SHRINK_BUDGET` changes the cap (default 200 replays).
 

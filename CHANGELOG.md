@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- A failure in the canonical (declared) order is now shrunk like a shuffled one, and replays as a `RUNABOUT_TRAIL` artifact. The declared order runs every step, so it is often the first trail to fail, and a 7-step canonical failure used to leave the reader to bisect it by hand. The headline reads `Shrunk the canonical order from N executions to M`, and the last line says to re-run the journey for the full trail, since a seed would replay a shuffled trail instead. Trails and seeds are unchanged; `RUNABOUT_SHRINK=0` still turns shrinking off. ([#41](https://github.com/Vusys/laravel-runabout/issues/41))
+
 ## [1.1.0] - 2026-10-15
 
 Driven by journey-testing a large real application (BookStack), which surfaced journeys the 1.0 step model could not express. Every 1.0 seed and `RUNABOUT_TRAIL` artifact replays unchanged.
