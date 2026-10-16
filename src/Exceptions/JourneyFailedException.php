@@ -53,18 +53,22 @@ final class JourneyFailedException extends RuntimeException
      * wants to see the whole thing.
      *
      * @param  self  $shrunkReplay  The replayed-mode failure of the shrunk trail.
+     * @param  bool  $canonical  Whether the original trail was the canonical order, which a seed would not reproduce.
      */
-    public static function shrunk(self $shrunkReplay, int $originalExecutions, int $originalSeed, int $replays): self
+    public static function shrunk(self $shrunkReplay, int $originalExecutions, int $originalSeed, int $replays, bool $canonical = false): self
     {
         $shrunkExecutions = count($shrunkReplay->trail()->tokens());
+        $from = $canonical ? ' the canonical order' : '';
 
         // A shrink that removed no executions still minimised drawn values.
         $headline = $shrunkExecutions < $originalExecutions
-            ? sprintf('Shrunk from %d executions to %d (%d replays):', $originalExecutions, $shrunkExecutions, $replays)
-            : sprintf('Shrunk drawn values; all %d executions are needed (%d replays):', $originalExecutions, $replays);
+            ? sprintf('Shrunk%s from %d executions to %d (%d replays):', $from, $originalExecutions, $shrunkExecutions, $replays)
+            : sprintf('Shrunk drawn values%s; all %d executions are needed (%d replays):', $canonical ? ' in the canonical order' : '', $originalExecutions, $replays);
 
         $message = $headline."\n".$shrunkReplay->getMessage()
-            .sprintf("\nReplay the full %d-execution trail with RUNABOUT_SEED=%d.", $originalExecutions, $originalSeed);
+            .($canonical
+                ? sprintf("\nRe-run the journey to reproduce the full %d-execution trail.", $originalExecutions)
+                : sprintf("\nReplay the full %d-execution trail with RUNABOUT_SEED=%d.", $originalExecutions, $originalSeed));
 
         $exception = new self($message, 0, $shrunkReplay->getPrevious());
         $exception->trail = $shrunkReplay->trail();

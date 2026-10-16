@@ -6,7 +6,7 @@ Runabout has no config file. Runtime behaviour is controlled fluently on the run
 |---|---|
 | `RUNABOUT_SEED=923206350` | Replay one exact shuffled trail. Every failure message prints this line for you. |
 | `RUNABOUT_TRAIL='{"seed":...,"steps":[...]}'` | Replay one exact trail from an artifact (a seed plus an ordered token list), including a shrunk or repeat-heavy trail a bare seed cannot reproduce. `RUNABOUT_TRAIL=@path.json` reads it from a file. Printed for you under every shrunk failure. |
-| `RUNABOUT_SHRINK=0` | Turn off automatic shrinking of failing trails. |
+| `RUNABOUT_SHRINK=0` | Turn off automatic shrinking of failing trails, canonical ones included. Each shrink candidate replays the journey, so on slow HTTP journeys this saves real time when you only want the raw failure. |
 | `RUNABOUT_SHRINK_BUDGET=200` | Cap how many candidate replays each shrink pass may run (default 200). Length and value shrinking get this budget each, not one between them. |
 | `RUNABOUT_RANDOMIZE=1` | Explore fresh random seeds instead of the stable derived ones. Meant for a nightly CI job that hunts orderings the fixed seeds never visit; any failure it finds prints its seed, so it replays exactly. |
 | `RUNABOUT_VERBOSE=1` | Print every completed trail to stderr as it runs. |

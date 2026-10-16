@@ -151,7 +151,7 @@ The mirror image — trail 2 failing because trail 1's rows are *still there* �
 
 Shrinking is skipped, by design, when:
 
-- the failing trail was **canonical**, **exhaustive**, or already **replayed** — only `shuffled` and `repeat-heavy` trails are shrunk, because the others already reproduce directly;
+- the failing trail was **exhaustive** or already **replayed** — only `canonical`, `shuffled` and `repeat-heavy` trails are shrunk;
 - the failure is **structural** (a deadlock, a runaway, a broken definition) — there's no meaningful shorter subsequence of a journey that was never valid;
 - the trail is a **single execution** — there's nothing to remove;
 - `RUNABOUT_SHRINK=0` is set;

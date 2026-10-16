@@ -340,14 +340,13 @@ final class PendingJourney
 
     /**
      * Minimise a failing trail to the shortest token list that reproduces the
-     * same failure, and re-frame the exception around it. Off for canonical
-     * (reproduces by re-running) and structural failures (deadlocks, runaways,
-     * broken journeys — no meaningful subsequence), and skippable with
-     * RUNABOUT_SHRINK=0.
+     * same failure, and re-frame the exception around it. Off for structural
+     * failures (deadlocks, runaways, broken journeys — no meaningful
+     * subsequence), and skippable with RUNABOUT_SHRINK=0.
      */
     private function shrink(JourneyRunner $runner, JourneyFailedException $failure): JourneyFailedException
     {
-        if (! Environment::shrinkingEnabled() || ! in_array($failure->trail()->mode(), ['shuffled', 'repeat-heavy'], true)) {
+        if (! Environment::shrinkingEnabled() || ! in_array($failure->trail()->mode(), ['canonical', 'shuffled', 'repeat-heavy'], true)) {
             return $failure;
         }
 
@@ -386,7 +385,7 @@ final class PendingJourney
         $replay = $this->replayFailure($runner, $seed, $shrunkTokens, $value['forced']);
 
         return $replay instanceof JourneyFailedException
-            ? JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'] + $value['replays'])
+            ? JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'] + $value['replays'], $original->mode() === 'canonical')
             : $failure;
     }
 
