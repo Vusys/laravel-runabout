@@ -95,8 +95,11 @@ jobs:
           # latency: wall clock on shared runners is noisy, so alert only
           # outside a 99% t-test bound over the last 64 master runs.
           # queries: seeded benches issue the same queries every run, so
-          # any increase is real (percentage, upper boundary 0). Every
-          # threshold must list the same options; `_` skips one.
+          # any increase is real (percentage, upper boundary 0). Compare
+          # against the latest master run only: a mean over all history
+          # sits below a count that legitimately rose once, and flags
+          # every PR after it. Every threshold must list the same
+          # options; `_` skips one.
           # --thresholds-reset drops any threshold not listed here.
           bencher run \
             --project laravel-runabout \
@@ -109,7 +112,7 @@ jobs:
             --threshold-upper-boundary 0.99 \
             --threshold-measure queries \
             --threshold-test percentage \
-            --threshold-max-sample-size _ \
+            --threshold-max-sample-size 1 \
             --threshold-upper-boundary 0.00 \
             --adapter json \
             --file results.bmf.json
