@@ -100,7 +100,7 @@ public function forget(string $key): void
 
 // Seeded randomness — the only sanctioned source
 public function randomInt(int $min, int $max): int
-public function pick(array $options): mixed
+public function pick(array $options): mixed                        // shrunk listings show what it picked: [drew 1 → Order #140]
 public function randomizer(): Randomizer                           // escape hatch; marks the execution value-opaque
 
 // Run history

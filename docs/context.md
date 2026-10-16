@@ -39,7 +39,7 @@ Typed getters are worth preferring in assertions: a mistyped key surfaces as a c
 
 This is the contract that makes trails reproducible: **all randomness inside a step must come from the context**, never from `rand()`, `mt_rand()`, `array_rand()`, or `fake()`.
 
-- `pick(array $options)` — a seeded choice from the options.
+- `pick(array $options)` — a seeded choice from the options. In a shrunk trail's listing the draw names what it picked (`[drew 1 → Order #140]`) for models, enums and scalars; see [Reproducing failures](reproducing-failures.md#automatic-shrinking).
 - `randomInt(int $min, int $max)` — a seeded integer in range.
 - `randomizer()` — the underlying `\Random\Randomizer` as an escape hatch. Using it marks the execution value-opaque, so those draws are excluded from [value shrinking](reproducing-failures.md); prefer `pick()`/`randomInt()` when you want the shrinker to minimise the value.
 

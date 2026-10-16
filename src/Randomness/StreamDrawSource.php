@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Vusys\Runabout\Randomness;
 
+use Closure;
 use Random\Randomizer;
 
 /**
@@ -23,11 +24,11 @@ final class StreamDrawSource implements DrawSource
 
     public function __construct(private readonly Randomizer $randomizer) {}
 
-    public function int(int $min, int $max): int
+    public function int(int $min, int $max, ?Closure $describe = null): int
     {
         $value = $this->randomizer->getInt($min, $max);
 
-        $this->draws[] = new Draw($min, $max, $value);
+        $this->draws[] = new Draw($min, $max, $value, $describe instanceof Closure ? $describe($value) : null);
 
         return $value;
     }
