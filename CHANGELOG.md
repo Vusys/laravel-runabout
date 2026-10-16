@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Added
+
+- Actors can log in on a named guard: `'admin' => [$user, 'admin']` in `actors()`, or `$ctx->actingAs($user, 'admin', guard: 'admin')`. Before, every actor logged in on the default guard. In an app with a separate `admin` guard, the app redirected an admin actor to login. A call to `actingAs($admin, 'admin')` by hand made `admin` the default guard for the rest of the test. A later storefront step then created a cart for the admin. Runabout now sets a named-guard actor on its guard only. Once a named guard is in play, Runabout resets the default guard before each request. It also logs out the other actors' guards, as separate production sessions would. Journeys whose actors all use the default guard behave as before. ([#53](https://github.com/Vusys/laravel-runabout/issues/53))
+
 ## [1.2.0] - 2026-10-16
 
 Failure reports that need less decoding: canonical failures are shrunk, the output has fewer repeated messages and Runabout frames, and a shrunk trail names what each `pick()` picked. Every 1.1 seed and `RUNABOUT_TRAIL` artifact replays unchanged.

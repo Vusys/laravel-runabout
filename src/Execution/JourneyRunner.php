@@ -530,7 +530,8 @@ final class JourneyRunner
     private function registerActors(Journey $journey, Context $context): void
     {
         foreach ($journey->actors() as $name => $user) {
-            $context->actingAs($user, $name);
+            [$user, $guard] = is_array($user) ? $user : [$user, null];
+            $context->actingAs($user, $name, guard: $guard);
         }
     }
 

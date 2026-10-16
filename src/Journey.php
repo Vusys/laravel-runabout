@@ -16,7 +16,8 @@ abstract class Journey
      * Named actors to register on this journey's context at the start of every
      * trail, so steps can make authenticated requests through them
      * ($ctx->as('manager')->postJson(...)) without a setup step. Return a map of
-     * actor name to the user it authenticates as.
+     * actor name to the user it authenticates as, or to [$user, 'guard'] for
+     * an actor that logs in on a guard other than the default.
      *
      * Actors live on the per-trail context, so they must be re-registered each
      * trail; declaring them here does that automatically. The users must exist
@@ -24,7 +25,7 @@ abstract class Journey
      * anything created inside a trail is rolled back before the next one, so
      * register those with $ctx->actingAs() in a step instead.
      *
-     * @return array<string, Authenticatable>
+     * @return array<string, Authenticatable|array{Authenticatable, string}>
      */
     public function actors(): array
     {

@@ -24,7 +24,7 @@ Step::make('cast vote')
 
 ## Registering and switching actors
 
-- `$ctx->actingAs($user, 'name', $session = [])` — register a named actor authenticated as `$user`, optionally with session state. Returns the `Actor`.
+- `$ctx->actingAs($user, 'name', $session = [], guard: null)` — register a named actor authenticated as `$user`, optionally with session state and on a [named guard](#apps-with-several-guards). Returns the `Actor`.
 - `$ctx->as('name')` — get a previously registered actor.
 - `$ctx->lastResponse()` — the most recent `TestResponse` returned by any actor.
 
@@ -51,6 +51,30 @@ final class ReviewJourney extends Journey
 ```
 
 The users declared in `actors()` must exist **before** the run (create them in the test and pass them in). Anything created *inside* a trail is rolled back before the next one, so register those with `$ctx->actingAs()` in a step — as the voters above do.
+
+## Apps with several guards
+
+By default an actor logs in on the default guard. For an app with several, such as `web` for the storefront and `admin` for the back office, name the guard:
+
+```php
+public function actors(): array
+{
+    return [
+        'shopper' => $this->customer,           // the default guard
+        'admin' => [$this->adminUser, 'admin'],  // the admin guard
+    ];
+}
+
+$ctx->actingAs($user, 'late admin', guard: 'admin');  // the same, mid-trail
+```
+
+Runabout sets a named-guard actor on that guard only. Laravel's `actingAs($user, 'admin')` would also make `admin` the default guard for the rest of the test. Storefront code that calls `auth()->user()` would then see the admin as the current customer. Routes pick their guard through middleware (`auth:admin`), as they do in production.
+
+Once a named guard is in play, every actor request also starts the way a production request does:
+- Runabout resets the default guard to the configured one. Laravel's `auth:admin` middleware switches the default guard, and the test app outlives the request.
+- Runabout logs out every other actor's guard. In production each actor has its own session, so an admin request does not also arrive logged in as the last shopper.
+
+Journeys whose actors all use the default guard behave as before.
 
 ## Carrying session / tenancy state
 
