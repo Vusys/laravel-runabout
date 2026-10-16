@@ -238,11 +238,12 @@ final class Context
      * the returned Actor are authenticated as this user; any $session data is
      * applied to every request the actor makes (for apps that carry tenancy or
      * other state in the session), and can be extended per request with
-     * Actor::withSession().
+     * Actor::withSession(). A $guard logs the actor in on that guard instead
+     * of the default one, for apps with several (a storefront and an admin).
      *
      * @param  array<string, mixed>  $session
      */
-    public function actingAs(Authenticatable $user, string $name, array $session = []): Actor
+    public function actingAs(Authenticatable $user, string $name, array $session = [], ?string $guard = null): Actor
     {
         if (! $this->http instanceof HttpDriver) {
             throw new RuntimeException(
@@ -250,7 +251,7 @@ final class Context
             );
         }
 
-        return $this->actors[$name] = new Actor($name, $user, $this->http, $this, $session);
+        return $this->actors[$name] = new Actor($name, $user, $this->http, $this, $session, $guard);
     }
 
     /** Retrieve a previously registered actor: $ctx->as('manager')->postJson(...). */

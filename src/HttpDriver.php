@@ -17,7 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
 final readonly class HttpDriver
 {
     /**
-     * @param  Closure(Authenticatable): void  $authenticate
+     * @param  Closure(Authenticatable, ?string): void  $authenticate  Authenticates the user on the named guard, or the default one for null.
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $json
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $form
      * @param  Closure(array<string, mixed>): void|null  $session  Applies session data to the next request; null when the test case exposes no session.
@@ -29,9 +29,9 @@ final readonly class HttpDriver
         private ?Closure $session = null,
     ) {}
 
-    public function authenticate(Authenticatable $user): void
+    public function authenticate(Authenticatable $user, ?string $guard = null): void
     {
-        ($this->authenticate)($user);
+        ($this->authenticate)($user, $guard);
     }
 
     /**

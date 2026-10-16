@@ -6,6 +6,7 @@ namespace Vusys\Runabout;
 
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use InvalidArgumentException;
@@ -41,12 +42,45 @@ trait RunsJourneys
     /**
      * Adapts this test case's HTTP methods (Laravel's MakesHttpRequests) so
      * actors inside steps can make authenticated requests through it.
+     *
+     * An actor on a named guard is set on that guard only. actingAs() would
+     * also make it the default guard, so code calling auth()->user() would
+     * see an admin as the current customer.
      */
     protected function journeyHttpDriver(): HttpDriver
     {
+        /** @var array<string, string> $guards */
+        $guards = [];
+        $default = null;
+        $named = false;
+
         return new HttpDriver(
-            authenticate: function (Authenticatable $user): void {
-                $this->actingAs($user);
+            authenticate: function (Authenticatable $user, ?string $guard) use (&$guards, &$default, &$named): void {
+                $default ??= Auth::getDefaultDriver();
+                $guards[$guard ?? $default] = $guard ?? $default;
+                $named = $named || $guard !== null;
+
+                // In production each request starts on the configured default
+                // guard and with only its own actor's session. The test app
+                // outlives a request, and `auth:admin` middleware switches the
+                // default guard, so undo both once a named guard is in play.
+                if ($named) {
+                    Auth::shouldUse($default);
+
+                    foreach ($guards as $other) {
+                        $resolved = Auth::guard($other);
+
+                        if (method_exists($resolved, 'forgetUser')) {
+                            $resolved->forgetUser();
+                        }
+                    }
+                }
+
+                if ($guard === null) {
+                    $this->actingAs($user);
+                } else {
+                    Auth::guard($guard)->setUser($user);
+                }
             },
             json: fn (string $method, string $uri, array $data, array $headers): TestResponse => $this->json($method, $uri, $data, $headers),
             form: fn (string $method, string $uri, array $data, array $headers): TestResponse => match ($method) {

@@ -114,6 +114,14 @@ Re-run the journey normally to find the bug again and capture a fresh artifact. 
 | `Context key "post id" holds string, expected int.` | An id read straight out of a JSON response body arrives as a string on some drivers — cast at the `remember()` call. |
 | `No actor has made a request yet in this trail.` | `lastResponse()` was called before any actor request, typically from an assertion on a step whose `act` doesn't make one. |
 
+## An admin actor is redirected to login
+
+The actor logged in on the default guard, but the route is behind `auth:admin`. Name the guard: `'admin' => [$user, 'admin']` in `actors()`, or `$ctx->actingAs($user, 'admin', guard: 'admin')`. See [apps with several guards](actors-http.md#apps-with-several-guards).
+
+## Storefront code sees the admin as the current user
+
+Something called `actingAs($admin, 'admin')` on the test case, which also makes `admin` the default guard for the rest of the test. Code that calls `auth()->user()` then gets the admin. Instead, register the admin as an actor on the `admin` guard. Runabout sets the user on that guard and does not change the default guard.
+
 ## An invariant complains about the initial state
 
 ```

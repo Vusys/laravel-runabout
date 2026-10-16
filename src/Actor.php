@@ -17,6 +17,7 @@ final readonly class Actor
 {
     /**
      * @param  array<string, mixed>  $session  Applied to every request this actor makes.
+     * @param  string|null  $guard  The auth guard this actor logs in on; null for the default guard.
      */
     public function __construct(
         private string $name,
@@ -24,6 +25,7 @@ final readonly class Actor
         private HttpDriver $http,
         private Context $context,
         private array $session = [],
+        private ?string $guard = null,
     ) {}
 
     public function name(): string
@@ -45,7 +47,7 @@ final readonly class Actor
      */
     public function withSession(array $session): self
     {
-        return new self($this->name, $this->user, $this->http, $this->context, [...$this->session, ...$session]);
+        return new self($this->name, $this->user, $this->http, $this->context, [...$this->session, ...$session], $this->guard);
     }
 
     /**
@@ -153,7 +155,7 @@ final readonly class Actor
      */
     private function json(string $method, string $uri, array $data, array $headers): TestResponse
     {
-        $this->http->authenticate($this->user);
+        $this->http->authenticate($this->user, $this->guard);
         $this->http->applySession($this->session);
 
         return $this->context->rememberResponse($this->http->json($method, $uri, $data, $headers));
@@ -166,7 +168,7 @@ final readonly class Actor
      */
     private function form(string $method, string $uri, array $data, array $headers): TestResponse
     {
-        $this->http->authenticate($this->user);
+        $this->http->authenticate($this->user, $this->guard);
         $this->http->applySession($this->session);
 
         return $this->context->rememberResponse($this->http->form($method, $uri, $data, $headers));
