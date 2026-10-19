@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Support;
 
 use Illuminate\Cache\ArrayStore;
-use Illuminate\Cache\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Log\Context\Repository as ContextRepository;
 use Illuminate\Support\Facades\Context as ContextFacade;
@@ -22,7 +21,7 @@ use ReflectionProperty;
  */
 final class FrameworkState
 {
-    /** Flush every in-memory cache store the app has resolved: the default store and the rate limiter's. */
+    /** Flush the in-memory cache stores the app uses: the default store and the rate limiter's. */
     public static function flushArrayCaches(): void
     {
         foreach (self::arrayStores() as $store) {
@@ -33,16 +32,11 @@ final class FrameworkState
     /** Forget Laravel Context and scoped container instances, as a fresh production request starts without them. */
     public static function flushRequestState(): void
     {
-        $app = Container::getInstance();
-
         // Flush the Context the facade holds (it caches what it resolved, so
         // after an earlier forget the container may already hold a newer
         // instance), forget scoped instances, then let the facade re-resolve.
-        if ($app->bound(ContextRepository::class)) {
-            ContextFacade::flush();
-        }
-
-        $app->forgetScopedInstances();
+        ContextFacade::flush();
+        Container::getInstance()->forgetScopedInstances();
         Facade::clearResolvedInstance(ContextRepository::class);
     }
 
@@ -66,40 +60,36 @@ final class FrameworkState
         $entries = 0;
 
         foreach (self::arrayStores() as $store) {
+            /** @var array<string, mixed> $storage */
             $storage = (new ReflectionProperty(ArrayStore::class, 'storage'))->getValue($store);
-            $entries += is_array($storage) ? count($storage) : 0;
+            $entries += count($storage);
         }
 
-        $app = Container::getInstance();
-        $context = 0;
-
-        if ($app->bound(ContextRepository::class)) {
-            $repository = $app->make(ContextRepository::class);
-            $context = count($repository->all()) + count($repository->allHidden());
-        }
-
-        return ['array cache entries' => $entries, 'Context keys' => $context];
+        return [
+            'array cache entries' => $entries,
+            'Context keys' => count(ContextFacade::all()) + count(ContextFacade::allHidden()),
+        ];
     }
 
-    /** @return list<ArrayStore> */
+    /** @return array<int, ArrayStore> Keyed by object id, so a store the limiter shares with the default appears once. */
     private static function arrayStores(): array
     {
         $app = Container::getInstance();
 
-        if (! $app->bound('cache') || ! $app->bound('config')) {
+        if (! $app->bound('cache')) {
             return [];
         }
 
-        $cache = $app->make('cache');
-
+        /** @var string|null $limiter */
+        $limiter = $app->make('config')->get('cache.limiter');
         $stores = [];
 
-        foreach (array_unique(array_filter([$app->make('config')->get('cache.default'), $app->make('config')->get('cache.limiter')], is_string(...))) as $name) {
-            $repository = $cache->store($name);
-            $store = $repository instanceof Repository ? $repository->getStore() : null;
+        // The rate limiter uses the default store unless cache.limiter names another.
+        foreach ([null, $limiter] as $name) {
+            $store = $app->make('cache')->store($name)->getStore();
 
             if ($store instanceof ArrayStore) {
-                $stores[] = $store;
+                $stores[spl_object_id($store)] = $store;
             }
         }
 

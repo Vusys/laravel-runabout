@@ -531,7 +531,7 @@ final class PendingJourney
             return false;
         } catch (JourneyFailedException) {
             return true;
-        } catch (OrderNotViableException|InvalidJourneyException) {
+        } catch (OrderNotViableException) {
             // No longer viable once the state was cleared: it depended on it too.
             return false;
         }
