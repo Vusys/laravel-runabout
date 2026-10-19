@@ -26,7 +26,7 @@ The abstract base class. See [Core concepts](concepts.md).
 
 ```php
 abstract public function steps(): array               // list<Step>, required
-public function actors(): array                       // array<string, Authenticatable|array{Authenticatable, string}>; [$user, 'guard'] names a guard
+public function actors(): array                       // array<string, Authenticatable|array{Authenticatable, string|list<string>}>; [$user, 'guard'] names a guard, [$user, ['web', 'api']] several
 public function invariants(): array                   // list<Invariant>
 public function aroundStep(Closure $execution, Context $context): void
 ```
@@ -115,7 +115,7 @@ public function ranBefore(string $step): bool
 public function noop(string $reason = ''): void                    // this execution had no effect
 
 // Actors
-public function actingAs(Authenticatable $user, string $name, array $session = [], ?string $guard = null): Actor
+public function actingAs(Authenticatable $user, string $name, array $session = [], string|array|null $guard = null): Actor   // a guard, a list of guards, or null for the default
 public function as(string $name): Actor
 public function lastResponse(): TestResponse
 

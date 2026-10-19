@@ -17,7 +17,7 @@ final readonly class Actor
 {
     /**
      * @param  array<string, mixed>  $session  Applied to every request this actor makes.
-     * @param  string|null  $guard  The auth guard this actor logs in on; null for the default guard.
+     * @param  string|non-empty-list<string>|null  $guard  The auth guard this actor logs in on, or several; null for the default guard.
      */
     public function __construct(
         private string $name,
@@ -25,7 +25,7 @@ final readonly class Actor
         private HttpDriver $http,
         private Context $context,
         private array $session = [],
-        private ?string $guard = null,
+        private string|array|null $guard = null,
     ) {}
 
     public function name(): string

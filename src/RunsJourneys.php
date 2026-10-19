@@ -107,9 +107,14 @@ trait RunsJourneys
         $named = false;
 
         return new HttpDriver(
-            authenticate: function (?Authenticatable $user, ?string $guard) use (&$guards, &$default, &$named): void {
+            authenticate: function (?Authenticatable $user, string|array|null $guard) use (&$guards, &$default, &$named): void {
                 $default ??= Auth::getDefaultDriver();
-                $guards[$guard ?? $default] = $guard ?? $default;
+                $requested = is_array($guard) ? $guard : [$guard];
+
+                foreach ($requested as $each) {
+                    $guards[$each ?? $default] = $each ?? $default;
+                }
+
                 $named = $named || $guard !== null;
 
                 // In production each request starts on the configured default
@@ -128,14 +133,16 @@ trait RunsJourneys
                     }
                 }
 
-                if (! $user instanceof Authenticatable) {
-                    $resolved = Auth::guard($guard);
+                foreach ($requested as $each) {
+                    if (! $user instanceof Authenticatable) {
+                        $resolved = Auth::guard($each);
 
-                    if (method_exists($resolved, 'forgetUser')) {
-                        $resolved->forgetUser();
+                        if (method_exists($resolved, 'forgetUser')) {
+                            $resolved->forgetUser();
+                        }
+                    } else {
+                        $this->journeyAuthenticate($user, $each);
                     }
-                } else {
-                    $this->journeyAuthenticate($user, $guard);
                 }
 
                 // After authenticating: a helper such as Passport::actingAs()
