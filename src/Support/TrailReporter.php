@@ -58,6 +58,12 @@ final class TrailReporter
     }
 
     /** Print the aggregate coverage summary once the run has finished. */
+    /** Write a line of run output to STDERR. */
+    public static function write(string $text): void
+    {
+        fwrite(STDERR, $text);
+    }
+
     public static function printCoverage(string $journeys, TrailCoverage $coverage): void
     {
         fwrite(STDERR, sprintf("\n[%s] trail coverage\n%s\n", $journeys, $coverage->describe()));

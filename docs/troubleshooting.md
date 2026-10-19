@@ -159,6 +159,12 @@ If trail 1 passes and trail 2 fails on missing data, the setup almost certainly 
 
 The mirror image — trail 2 failing because trail 1's rows are *still there* — means the code under test commits its own transactions, so the wrapping rollback can't undo them. Switch to `resetByTruncating()`.
 
+If trail 2 fails on state that isn't in the database at all (a cached value, a rate limiter answering 429, a Context flag, a user who still has permissions another actor revoked), the failure message usually says which: see [When the failure depends on earlier trails](reproducing-failures.md#when-the-failure-depends-on-earlier-trails). `RUNABOUT_LEAK_CHECK=1` warns about cache and Context leaks even when nothing fails.
+
+## My shrunk trail passes when I replay it
+
+The failure depended on state an earlier trail left behind, so it only reproduced in the process that ran those trails. Check the end of the failure message for a "passed when replayed after …" note, which names the state, and see [When the failure depends on earlier trails](reproducing-failures.md#when-the-failure-depends-on-earlier-trails).
+
 ## A step "ended the trail's database transaction"
 
 The step ran something that committed the trail's transaction, almost always a schema change on MySQL or MariaDB, which commits implicitly. See [Schema changes inside a trail](database-resets.md#schema-changes-inside-a-trail). If the reset itself reports `Rolling back the trail's transaction … failed`, the same thing happened somewhere Runabout doesn't check, such as inside a custom `wrapTrail()`.

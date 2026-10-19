@@ -80,6 +80,18 @@ A `pick()` draw also names what it picked, so a step that chooses which record t
 
 Eloquent models show their class basename and key, enums show `PostStatus::Draft`, and scalars show their value (strings quoted, cut to 24 characters). Any other option shows only its index, as does every `randomInt()` draw. Model keys come from the database, so on engines whose auto-increment survives the per-trail rollback (MySQL) the key in a replay can differ from the one in the original report. The index is what replays; the name is only there to read.
 
+### When the failure depends on earlier trails
+
+Replays run in the same PHP process as the trails before them. A database rollback resets rows, but not in-memory state: cache entries and rate-limiter counters in the array cache store, Laravel Context, auth guards, or the user objects actors hold. If that state is what made a trail fail, the minimal trail also fails during shrinking, but only because of what ran earlier, and its replay line may not reproduce it on its own.
+
+So when a trail other than the first fails, Runabout replays the minimal trail again after clearing each kind of state in turn. If it then passes, the failure ends with a note naming what had to be cleared and how to stop it leaking:
+
+```
+The minimal trail passed when replayed after flushing the array cache store, so the failure depends on state that earlier trails or replays left behind, and the replay line above may not reproduce it on its own. Cached values or rate-limiter counters are leaking between trails; flush them after each trail with resetExternal(fn () => Cache::flush()).
+```
+
+Only in-memory (array) cache stores are flushed for this, never a real one. To spot leaks before they cause a failure, set [`RUNABOUT_LEAK_CHECK=1`](environment.md).
+
 ## Replaying a shrunk trail: `RUNABOUT_TRAIL`
 
 `RUNABOUT_TRAIL` replays that exact shrunk trail — order and data both — which a bare seed cannot, because a shrunk or repeat-heavy trail is no longer what the seed alone produces:

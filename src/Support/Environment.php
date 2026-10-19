@@ -49,6 +49,12 @@ final class Environment
         return self::flag('RUNABOUT_VERBOSE');
     }
 
+    /** Whether to warn when a trail starts with framework state an earlier trail left behind. */
+    public static function leakCheckEnabled(): bool
+    {
+        return self::flag('RUNABOUT_LEAK_CHECK');
+    }
+
     /** Whether to explore fresh random seeds instead of the deterministic derived ones. */
     public static function randomizeEnabled(): bool
     {

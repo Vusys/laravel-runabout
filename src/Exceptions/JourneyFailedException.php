@@ -80,6 +80,15 @@ final class JourneyFailedException extends RuntimeException
         return $exception;
     }
 
+    /** @internal A copy of this failure with a note appended to its message. */
+    public function withNote(string $note): self
+    {
+        $exception = new self($this->getMessage()."\n".$note, $this->getCode(), $this->getPrevious());
+        $exception->trail = $this->trail;
+
+        return $exception;
+    }
+
     public function trail(): Trail
     {
         return $this->trail;

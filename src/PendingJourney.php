@@ -20,6 +20,7 @@ use Vusys\Runabout\Shrinking\FailureSignature;
 use Vusys\Runabout\Shrinking\SequenceShrinker;
 use Vusys\Runabout\Shrinking\ValueShrinker;
 use Vusys\Runabout\Support\Environment;
+use Vusys\Runabout\Support\FrameworkState;
 use Vusys\Runabout\Support\RollBack;
 use Vusys\Runabout\Support\TrailReporter;
 
@@ -38,6 +39,14 @@ final class PendingJourney
     private int $repeatBias = 1;
 
     private int $minLength = 0;
+
+    /** @var array{'array cache entries': int, 'Context keys': int}|null Framework state at the start of the first trail, for RUNABOUT_LEAK_CHECK. */
+    private ?array $firstFingerprint = null;
+
+    /** Trails started so far in this run, including the one running now. */
+    private int $trailsRun = 0;
+
+    private bool $leakReported = false;
 
     private ?int $exhaustiveLimit = null;
 
@@ -378,6 +387,8 @@ final class PendingJourney
 
     private function runTrail(JourneyRunner $runner, int $seed, bool $shuffle): void
     {
+        $this->trailsRun++;
+        $this->checkForLeaks();
         $trail = null;
 
         try {
@@ -413,10 +424,32 @@ final class PendingJourney
 
         $original = $failure->trail();
         $tokens = $original->tokens();
+        [$minimal, $tokens, $forced] = $this->minimise($runner, $failure, $tokens);
+
+        // State can only have leaked from an earlier trail of this run.
+        if ($this->trailsRun < 2) {
+            return $minimal;
+        }
+
+        $leak = $this->diagnoseLeak($runner, $original->seed(), $tokens, $forced);
+
+        return $leak === null ? $minimal : $minimal->withNote($leak);
+    }
+
+    /**
+     * Minimise a failing trail: the shortest token list that reproduces the
+     * same failure, then the smallest drawn values inside it.
+     *
+     * @param  list<TrailToken>  $tokens
+     * @return array{JourneyFailedException, list<TrailToken>, array<int, array<int, int>>} The failure to report, and the tokens and forced draws that reproduce it.
+     */
+    private function minimise(JourneyRunner $runner, JourneyFailedException $failure, array $tokens): array
+    {
+        $original = $failure->trail();
         $count = count($tokens);
 
         if ($count < 2) {
-            return $failure;
+            return [$failure, $tokens, []];
         }
 
         $signature = FailureSignature::from($failure);
@@ -435,15 +468,73 @@ final class PendingJourney
         $value = $this->valueShrink($runner, $seed, $shrunkTokens, $signature);
         $valueReduced = $value['forced'] !== [];
 
-        if (! $sequenceReduced && ! $valueReduced) {
-            return $failure;
+        $replay = $sequenceReduced || $valueReduced ? $this->replayFailure($runner, $seed, $shrunkTokens, $value['forced']) : null;
+
+        if ($replay instanceof JourneyFailedException) {
+            return [JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'] + $value['replays'], $original->mode() === 'canonical'), $shrunkTokens, $value['forced']];
         }
 
-        $replay = $this->replayFailure($runner, $seed, $shrunkTokens, $value['forced']);
+        return [$failure, $tokens, []];
+    }
 
-        return $replay instanceof JourneyFailedException
-            ? JourneyFailedException::shrunk($replay, $count, $seed, $result['replays'] + $value['replays'], $original->mode() === 'canonical')
-            : $failure;
+    /**
+     * Replays run in the same process as the trails before them, so state a
+     * database rollback doesn't reach (cache, Context, guards, actor user
+     * objects) can make a short trail fail only because of what ran earlier.
+     * Replay the minimal trail after clearing each in turn: if it then
+     * passes, say so, because its artifact may not reproduce on its own.
+     *
+     * @param  list<TrailToken>  $tokens
+     * @param  array<int, array<int, int>>  $forcedDraws
+     */
+    private function diagnoseLeak(JourneyRunner $runner, int $seed, array $tokens, array $forcedDraws): ?string
+    {
+        $probes = [
+            ['flushing the array cache store', 'Cached values or rate-limiter counters are leaking between trails; flush them after each trail with resetExternal(fn () => Cache::flush()).', FrameworkState::flushArrayCaches(...), false],
+            ['clearing Laravel Context and scoped instances', 'Request-scoped state is leaking between requests; clear it in aroundStep() before each step.', FrameworkState::flushRequestState(...), false],
+            ['logging out every auth guard', 'A login is leaking between trails; authenticate through actors rather than in setUp().', FrameworkState::forgetGuards(...), false],
+            ['reloading the actors\' users', 'An actor\'s user object carries state from earlier trails; call freshActors().', null, true],
+        ];
+
+        foreach ($probes as [$cleared, $advice, $clear, $freshUsers]) {
+            if ($freshUsers && ! $this->http instanceof HttpDriver) {
+                continue;
+            }
+
+            if ($clear !== null) {
+                $clear();
+            }
+
+            if (! $this->reproducesWith($runner, $seed, $tokens, $forcedDraws, $freshUsers ? $this->http->withFreshUsers() : $this->http)) {
+                return sprintf(
+                    'The minimal trail passed when replayed after %s, so the failure depends on state that earlier trails or replays left behind, and the replay line above may not reproduce it on its own. %s',
+                    $cleared,
+                    $advice,
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<TrailToken>  $tokens
+     * @param  array<int, array<int, int>>  $forcedDraws
+     */
+    private function reproducesWith(JourneyRunner $runner, int $seed, array $tokens, array $forcedDraws, ?HttpDriver $http): bool
+    {
+        try {
+            ($this->wrapper)(function () use ($runner, $seed, $tokens, $forcedDraws, $http): void {
+                $runner->runTokens($this->journeys, $seed, $tokens, $http, $forcedDraws);
+            });
+
+            return false;
+        } catch (JourneyFailedException) {
+            return true;
+        } catch (OrderNotViableException|InvalidJourneyException) {
+            // No longer viable once the state was cleared: it depended on it too.
+            return false;
+        }
     }
 
     /**
@@ -588,6 +679,40 @@ final class PendingJourney
         }
 
         return null;
+    }
+
+    /**
+     * RUNABOUT_LEAK_CHECK: compare framework state at the start of each trail
+     * with the start of the first, and warn once when a trail starts with
+     * state an earlier one left behind.
+     */
+    private function checkForLeaks(): void
+    {
+        if (! Environment::leakCheckEnabled() || $this->leakReported) {
+            return;
+        }
+
+        $now = FrameworkState::fingerprint();
+        $this->firstFingerprint ??= $now;
+        $grown = [];
+
+        foreach ($now as $what => $count) {
+            $before = $this->firstFingerprint[$what];
+
+            if ($count > $before) {
+                $grown[] = sprintf('%s %d → %d', $what, $before, $count);
+            }
+        }
+
+        if ($grown !== []) {
+            $this->leakReported = true;
+            TrailReporter::write(sprintf(
+                "Runabout leak check (%s): trail %d started with state earlier trails left behind: %s. A rollback doesn't reset this, so trails can depend on what ran before them.\n",
+                $this->names(),
+                $this->trailsRun,
+                implode('; ', $grown),
+            ));
+        }
     }
 
     private function notify(Trail $trail): void
