@@ -23,6 +23,7 @@ use Vusys\Runabout\Shrinking\FailureSignature;
 use Vusys\Runabout\Shrinking\SequenceShrinker;
 use Vusys\Runabout\Shrinking\ValueShrinker;
 use Vusys\Runabout\Support\Environment;
+use Vusys\Runabout\Support\Races;
 use Vusys\Runabout\Support\RollBack;
 use Vusys\Runabout\Support\TrailReporter;
 
@@ -352,6 +353,7 @@ final class PendingJourney
     public function run(): void
     {
         $this->hideOwnFramesFromPhpunit();
+        Races::beginRun();
 
         $coverage = TrailReporter::coverage($this->journeys);
 

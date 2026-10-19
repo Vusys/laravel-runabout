@@ -119,6 +119,7 @@ public function actingAs(Authenticatable $user, string $name, array $session = [
 public function actingWithToken(Authenticatable $user, string $token, string $name, array $session = [], array $headers = []): Actor   // authenticates by bearer token alone
 public function as(string $name): Actor
 public function lastResponse(): TestResponse
+public function racing(string $table, Closure $competitor, Closure $request): mixed   // run $competitor at an unlocked read of $table during $request
 
 // Clock
 public function travelTo(DateTimeInterface|string $moment): void
