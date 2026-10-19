@@ -7,6 +7,7 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 ### Added
 
 - A failed step that made an actor request now ends its failure message with the last response it received: the request's method and URI, the status, a redirect's target, and the validation errors flashed to the session or the start of the body. Most failed step assertions in an HTTP journey mean the app rejected the request for an unexpected reason, and finding out which used to mean adding debug output to the step and replaying. Invariant failures, and steps that made no request, are unchanged. ([#70](https://github.com/Vusys/laravel-runabout/issues/70))
+- A step that ends the trail's database transaction now fails with an explanation. On MySQL and MariaDB a schema change inside a step commits implicitly, so the trail's rows could no longer be rolled back, and the run used to fail at reset time with a bare `SAVEPOINT trans2 does not exist` that named neither the cause nor the step. With the default reset, `resetConnections()` or `resetExternal()`, Runabout now checks the transaction after every step and fails the step that ended it, pointing at `resetByTruncating(...)`. The failure is structural, so it isn't shrunk. A rollback that fails at reset no longer masks the trail's own failure, and on its own it fails with the same explanation. Resets supplied with `resetWith()` aren't checked. ([#69](https://github.com/Vusys/laravel-runabout/issues/69))
 
 ### Changed
 

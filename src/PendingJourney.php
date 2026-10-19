@@ -6,6 +6,7 @@ namespace Vusys\Runabout;
 
 use Closure;
 use Generator;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Util\ExcludeList;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
@@ -19,6 +20,7 @@ use Vusys\Runabout\Shrinking\FailureSignature;
 use Vusys\Runabout\Shrinking\SequenceShrinker;
 use Vusys\Runabout\Shrinking\ValueShrinker;
 use Vusys\Runabout\Support\Environment;
+use Vusys\Runabout\Support\RollBack;
 use Vusys\Runabout\Support\TrailReporter;
 
 /**
@@ -48,6 +50,9 @@ final class PendingJourney
     /** @var list<string|null>|null Connections to wrap in a rolled-back transaction; null until resetConnections() is called. */
     private ?array $transactedConnections = null;
 
+    /** @var list<string|null> Connections whose trail transaction the current reset relies on; none for resetWith()/resetByTruncating(). */
+    private array $resetConnections = [];
+
     /** @var list<Closure(): void> Cleanups run after each trail, for non-transactional external stores. */
     private array $externalResets = [];
 
@@ -72,6 +77,20 @@ final class PendingJourney
         }
 
         $this->journeys = $journeys;
+    }
+
+    /**
+     * @internal Fail the step that ends the trail transaction on these
+     * connections (null for the default). RunsJourneys turns this on for its
+     * transactional reset; resetWith() turns it off again.
+     *
+     * @param  list<string|null>  $connections
+     */
+    public function watchingTransactionsOn(array $connections): self
+    {
+        $this->resetConnections = $connections;
+
+        return $this;
     }
 
     /** How many seeded shuffled trails to run after the canonical one. */
@@ -186,6 +205,7 @@ final class PendingJourney
     public function resetWith(Closure $wrapper): self
     {
         $this->wrapper = $wrapper;
+        $this->resetConnections = [];
 
         return $this;
     }
@@ -256,6 +276,7 @@ final class PendingJourney
     {
         $connections = $this->transactedConnections ?? [null];
         $externalResets = $this->externalResets;
+        $this->resetConnections = $connections;
 
         $this->wrapper = function (Closure $trail) use ($connections, $externalResets): void {
             foreach ($connections as $name) {
@@ -263,12 +284,8 @@ final class PendingJourney
             }
 
             try {
-                $trail();
+                RollBack::after($trail, array_map(fn (?string $name): Connection => DB::connection($name), array_reverse($connections)));
             } finally {
-                foreach (array_reverse($connections) as $name) {
-                    DB::connection($name)->rollBack();
-                }
-
                 foreach ($externalResets as $cleanup) {
                     $cleanup();
                 }
@@ -321,7 +338,7 @@ final class PendingJourney
 
     private function execute(): void
     {
-        $runner = new JourneyRunner($this->countAssertions);
+        $runner = new JourneyRunner($this->countAssertions, $this->resetConnections);
 
         $exhaustiveLimit = $this->exhaustiveLimit;
 

@@ -159,12 +159,16 @@ If trail 1 passes and trail 2 fails on missing data, the setup almost certainly 
 
 The mirror image — trail 2 failing because trail 1's rows are *still there* — means the code under test commits its own transactions, so the wrapping rollback can't undo them. Switch to `resetByTruncating()`.
 
+## A step "ended the trail's database transaction"
+
+The step ran something that committed the trail's transaction, almost always a schema change on MySQL or MariaDB, which commits implicitly. See [Schema changes inside a trail](database-resets.md#schema-changes-inside-a-trail). If the reset itself reports `Rolling back the trail's transaction … failed`, the same thing happened somewhere Runabout doesn't check, such as inside a custom `wrapTrail()`.
+
 ## The failure wasn't shrunk
 
 Shrinking is skipped, by design, when:
 
 - the failing trail was **exhaustive** or already **replayed** — only `canonical`, `shuffled` and `repeat-heavy` trails are shrunk;
-- the failure is **structural** (a deadlock, a runaway, a broken definition) — there's no meaningful shorter subsequence of a journey that was never valid;
+- the failure is **structural** (a deadlock, a runaway, a broken definition, a step that ended the trail's transaction) — there's no meaningful shorter subsequence of a journey that was never valid;
 - the trail is a **single execution** — there's nothing to remove;
 - `RUNABOUT_SHRINK=0` is set;
 - no shorter trail and no smaller values reproduced the *same* failure, in which case the original is reported unchanged.
