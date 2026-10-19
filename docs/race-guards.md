@@ -23,7 +23,7 @@ While `request` runs, Runabout watches the queries it makes. At an unlocked read
 
 Your [invariants](invariants.md) judge the result (no duplicates, no over-allocation), so no new assertions are needed. `Invariants::uniqueBy()` is the usual partner for an existence check.
 
-- **Locked reads aren't interfered with.** A `SELECT` with `FOR UPDATE`, `FOR SHARE` or `LOCK IN SHARE MODE` (Laravel's `lockForUpdate()` and `sharedLock()`) would hold a real competitor back, so injecting there would be a false positive. A correctly guarded path passes.
+- **Locked reads aren't interfered with.** A `SELECT` with `FOR UPDATE`, `FOR SHARE` or `LOCK IN SHARE MODE` (Laravel's `lockForUpdate()` and `sharedLock()`) would hold a real competitor back, so injecting there would be a false positive. A correctly guarded path passes. Once the request has locked a row of the table inside a transaction it opened, later reads aren't interfered with either, until that transaction ends: a real competitor would be waiting on the lock. A lock taken outside such a transaction is released at once, as in production, so it doesn't count.
 - **Which read is seeded.** At each unlocked read of the table the step draws whether to interfere there, usually at the first. The choice replays from the seed or `RUNABOUT_TRAIL`, and shrinking moves it to the earliest read that still fails.
 - **At most once per request.** The competitor runs once at most, and its own queries are never interfered with.
 - **The competitor should call the app's own code**, such as the action or service the endpoint uses, so it writes the logs, counters and events a real request would.

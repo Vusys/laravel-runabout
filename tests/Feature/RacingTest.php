@@ -69,13 +69,63 @@ final class RacingTest extends TestCase
             table: 'users',
             competitor: $this->competitor('ann'),
             request: function (): void {
-                // SQLite's grammar drops lock clauses, so write the locked read out.
-                DB::connection()->getEventDispatcher()?->dispatch(new QueryExecuted('select * from "users" where "name" = ? for update', ['ann'], 0.1, DB::connection()));
+                $this->lockedRead();
                 User::query()->create(['name' => 'ann']);
             },
         )))->shuffles(10)->run();
 
         $this->assertSame([], $this->racedAt);
+    }
+
+    public function test_reads_while_the_request_holds_a_lock_are_never_raced(): void
+    {
+        $this->journey($this->journeyOf(fn (Context $ctx): mixed => $ctx->racing(
+            table: 'users',
+            competitor: $this->competitor('ann'),
+            request: fn () => DB::transaction(function (): bool {
+                $this->lockedRead();
+                // A real competitor waits for this transaction, so this check stands.
+                $this->register('ann');
+
+                return true;
+            }),
+        )))->shuffles(10)->run();
+
+        $this->assertSame([], $this->racedAt);
+    }
+
+    public function test_reads_after_the_locking_transaction_ends_are_raced_again(): void
+    {
+        $journey = $this->journeyOf(fn (Context $ctx) => $ctx->racing(
+            table: 'users',
+            competitor: $this->competitor('bob'),
+            request: function (): void {
+                DB::transaction(fn () => $this->lockedRead());
+                $this->reads = 1;
+                User::query()->where('name', 'carol')->exists();
+            },
+        ), uniqueNames: false);
+
+        $this->journey($journey)->trail(['seed' => 1, 'steps' => [[null, 'register', 1, [0]]]])->run();
+
+        $this->assertSame([1], $this->racedAt);
+    }
+
+    public function test_a_lock_outside_a_transaction_the_request_opened_is_released_at_once(): void
+    {
+        $journey = $this->journeyOf(fn (Context $ctx) => $ctx->racing(
+            table: 'users',
+            competitor: $this->competitor('bob'),
+            request: function (): void {
+                $this->lockedRead();
+                $this->reads = 1;
+                User::query()->where('name', 'carol')->exists();
+            },
+        ), uniqueNames: false);
+
+        $this->journey($journey)->trail(['seed' => 1, 'steps' => [[null, 'register', 1, [0]]]])->run();
+
+        $this->assertSame([1], $this->racedAt);
     }
 
     public function test_reads_of_other_tables_are_never_raced(): void
@@ -226,6 +276,12 @@ final class RacingTest extends TestCase
         if (! User::query()->where('name', $name)->exists()) {
             User::query()->create(['name' => $name]);
         }
+    }
+
+    /** SQLite's grammar drops lock clauses, so report the locked read by hand. */
+    private function lockedRead(): void
+    {
+        DB::connection()->getEventDispatcher()?->dispatch(new QueryExecuted('select * from "users" where "name" = ? for update', ['ann'], 0.1, DB::connection()));
     }
 
     /** A competitor that registers $name, noting how many reads into the request it ran. */

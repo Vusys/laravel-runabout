@@ -7,6 +7,7 @@ namespace Vusys\Runabout\Support;
 use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use WeakMap;
 
@@ -14,8 +15,10 @@ use WeakMap;
  * Context::racing()'s interference: while a request runs, the first unlocked
  * read of a table the seeded draws pick is followed, before the app can act on
  * it, by a competitor, as if a parallel request landed in the check-then-act
- * window. Query listeners can't be removed, so one is registered per events
- * dispatcher and dispatches to the race armed at the time.
+ * window. Once the request locks a row of the table inside a transaction, a
+ * real competitor would wait for that transaction to end, so there is no
+ * interference until it does. Query listeners can't be removed, so one is
+ * registered per events dispatcher and dispatches to the race armed at the time.
  *
  * @internal
  */
@@ -27,7 +30,7 @@ final class Races
     /** @var WeakMap<Dispatcher, true>|null */
     private static ?WeakMap $listening = null;
 
-    /** @var array{table: string, competitor: Closure(): mixed, interfereHere: Closure(): bool, unsupported: string|null}|null */
+    /** @var array{table: string, competitor: Closure(): mixed, interfereHere: Closure(): bool, unsupported: string|null, levels: array<string, int>, lockedAt: int|null}|null */
     private static ?array $armed = null;
 
     private static bool $skipReported = false;
@@ -53,7 +56,10 @@ final class Races
         }
 
         self::listen();
-        self::$armed = ['table' => $table, 'competitor' => $competitor, 'interfereHere' => $interfereHere, 'unsupported' => null];
+        // A lock taken outside a transaction the request opened (at the
+        // trail's own level) is released at once in production.
+        $levels = array_map(fn ($connection): int => $connection->transactionLevel(), DB::getConnections());
+        self::$armed = ['table' => $table, 'competitor' => $competitor, 'interfereHere' => $interfereHere, 'unsupported' => null, 'levels' => $levels, 'lockedAt' => null];
 
         try {
             return $request();
@@ -75,11 +81,20 @@ final class Races
     /** Whether $sql reads $table without a row lock (FOR UPDATE, FOR SHARE, LOCK IN SHARE MODE). */
     public static function isUnlockedRead(string $sql, string $table): bool
     {
+        return self::reads($sql, $table) && ! self::locks($sql);
+    }
+
+    private static function reads(string $sql, string $table): bool
+    {
         $quoted = preg_quote($table, '/');
 
         return preg_match('/^\s*\(?\s*select\b/i', $sql) === 1
-            && preg_match('/\b(from|join)\s+[`"\[]?'.$quoted.'[`"\]]?(\s|,|\)|$)/i', $sql) === 1
-            && preg_match('/\bfor\s+(update|share|no\s+key\s+update|key\s+share)\b|\block\s+in\s+share\s+mode\b/i', $sql) !== 1;
+            && preg_match('/\b(from|join)\s+[`"\[]?'.$quoted.'[`"\]]?(\s|,|\)|$)/i', $sql) === 1;
+    }
+
+    private static function locks(string $sql): bool
+    {
+        return preg_match('/\bfor\s+(update|share|no\s+key\s+update|key\s+share)\b|\block\s+in\s+share\s+mode\b/i', $sql) === 1;
     }
 
     private static function listen(): void
@@ -99,8 +114,29 @@ final class Races
     {
         $race = self::$armed;
 
-        if ($race === null || ! self::isUnlockedRead($query->sql, $race['table'])) {
+        if ($race === null || ! self::reads($query->sql, $race['table'])) {
             return;
+        }
+
+        $level = $query->connection->transactionLevel();
+
+        if (self::locks($query->sql)) {
+            if ($level > ($race['levels'][$query->connection->getName()] ?? 0) && $race['lockedAt'] === null) {
+                $race['lockedAt'] = $level;
+                self::$armed = $race;
+            }
+
+            return;
+        }
+
+        if ($race['lockedAt'] !== null) {
+            if ($level >= $race['lockedAt']) {
+                return;
+            }
+
+            // The transaction holding the lock has ended.
+            $race['lockedAt'] = null;
+            self::$armed = $race;
         }
 
         $driver = $query->connection->getDriverName();
