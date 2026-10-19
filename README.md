@@ -69,6 +69,7 @@ Full docs live at **[vusys.github.io/laravel-runabout](https://vusys.github.io/l
 | shuffles / repeatHeavy / exhaustive / seed | [Execution modes](docs/execution-modes.md) |
 | Cross-actor and multi-tenant bugs | [Interleaving journeys](docs/interleaving.md) |
 | Fresh state between trails | [Resetting state](docs/database-resets.md) |
+| What survives a trail or a request | [Process-lifetime state](docs/process-lifetime-state.md) |
 | Check-then-act races and their locks | [Testing race guards](docs/race-guards.md) |
 | Seeds, artifacts, and shrinking | [Reproducing failures](docs/reproducing-failures.md) |
 | Seeing what the shuffler explored | [Trails & coverage](docs/observability.md) |
