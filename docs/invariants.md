@@ -86,3 +86,52 @@ Invariant::make('daily vote bucket matches votes cast today', function (Context 
 ```
 
 The closure receives the context and should throw — a failed PHPUnit assertion is fine — when the property is violated. Custom and built-in invariants mix freely in the same `invariants()` array.
+
+## Oracles: checking query answers
+
+Invariants check stored state. They can't check what a query endpoint *answers*: a report, a filtered list, a search, a "due" or "overdue" list. A class of real bugs lives there, with every row correct and the answer wrong. A list that combines its filters with an unbracketed `OR`, for instance, lets one branch ignore every filter before it.
+
+Check those answers with an *oracle*: a step that calls the endpoint and compares the answer with one the journey works out itself, from the database or from first principles. Keep the oracle simple and obviously right, even if it's slow. It filters a whole collection in PHP where the endpoint builds a query, so the two can't share a bug.
+
+- **Vary the filters with `pick()`**, so the endpoint's filter combinations are exercised in the orders and states the shuffles produce, not just the one a hand-written test chose.
+- **Move the clock for date-bucketed endpoints.** Due, overdue, today and this week all change meaning as time passes. A repeatable clock step lets the shuffles ask the question at many points relative to the data.
+- **Compare ids, sorted**, unless the endpoint promises an order. Then compare in order, as the order is part of the answer.
+
+A worked example: a "due or overdue" list, checked against the dates the journey moves with `travel()`.
+
+```php
+public function steps(): array
+{
+    return [
+        Step::make('create task')->repeatable(max: 4)->act(function (Context $ctx): void {
+            $ctx->as('owner')->postJson('/tasks', [
+                'title' => 'task '.$ctx->timesRan('create task'),
+                'project' => $ctx->pick(['inbox', 'work']),
+                'due_on' => now()->addDays($ctx->randomInt(-2, 3))->toDateString(),
+                'done' => $ctx->pick([true, false]),
+            ])->assertCreated();
+        }),
+
+        Step::make('next day')->repeatable(max: 3)->act(fn (Context $ctx) => $ctx->travel('+1 day')),
+
+        Step::make('check the due list')->repeatable()->after('create task')->act(function (Context $ctx): void {
+            $project = $ctx->pick(['all', 'inbox']);
+
+            $answer = $ctx->as('owner')
+                ->getJson('/tasks/due?'.http_build_query(['project' => $project]))
+                ->assertOk()
+                ->json('data.*.id');
+
+            // The oracle: every task, filtered in PHP from first principles.
+            $expected = Task::query()->get()
+                ->filter(fn (Task $task): bool => ! $task->done && $task->due_on->lte(today()))
+                ->filter(fn (Task $task): bool => $project === 'all' || $task->project === $project)
+                ->pluck('id')->sort()->values()->all();
+
+            Assert::assertSame($expected, collect($answer)->sort()->values()->all(), "The due list for \"{$project}\" is wrong.");
+        }),
+    ];
+}
+```
+
+The check is a step, not an invariant, because it makes a request and only means something at certain points. An [invariant](#custom-invariants) can make actor requests too, if the answer should hold after every step. Its requests are observations, so they don't replace the steps' [`lastResponse()`](context.md).
