@@ -99,3 +99,19 @@ $this->assertGreaterThan(40, $coverage->distinctOrderings());
 ```
 
 Pass the journeys to the constructor, `new TrailCoverage([$journey])`, to leave out the pairs that their `after()` constraints forbid. `RUNABOUT_COVERAGE` does the same. Without the journeys, the summary lists every unobserved pair. `TrailCoverage` offers `trails()`, `distinctOrderings()`, `stepRuns()`, `timesBefore($before, $after)`, `unseenPairs()`, and `describe()` (the same summary `RUNABOUT_COVERAGE` prints).
+
+## Is my journey actually testing anything?
+
+A green journey only means something if it *could* have failed. Journeys pass vacuously more easily than ordinary tests: a guarded `act()` that never acts, requests that validation rejects and the step doesn't check, an ordering the shuffles never reach. Before trusting a clean run, check:
+
+- **Did the steps take effect?** Run with `RUNABOUT_COVERAGE=1` and look for steps that ran but never had an effect, and for the reasons they gave `noop()`. Then make it permanent with [`requireEffect()`](#did-the-steps-do-anything-requireeffect), so the run fails if that changes.
+- **Does the journey reach the interesting state?** Plant a temporary tripwire: an invariant that fails as soon as the state you care about exists (an order both paid and refunded, a ticket reassigned while it's locked). If the run stays green, the journey never got there, and the generators need work (see [Writing effective generators](context.md#writing-effective-generators)). Remove the tripwire once it fires.
+
+    ```php
+    Invariant::make('tripwire: a refunded order was paid again', function (): void {
+        Assert::assertFalse(Order::query()->where('status', 'paid')->whereNotNull('refunded_at')->exists());
+    }),
+    ```
+
+- **Would it catch the bug you're worried about?** For a suspected ordering, hand-write a [`RUNABOUT_TRAIL`](reproducing-failures.md#replaying-a-shrunk-trail-runabout_trail) with the steps in that order and confirm the journey fails on it against the buggy code.
+- **Are the shuffles enough?** For a journey with many steps, raise `shuffles()` and compare the distinct orderings and unobserved pairs in the coverage summary. If raising the count still turns up new orderings, the default isn't covering the space, so keep the higher count.
