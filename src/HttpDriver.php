@@ -25,6 +25,7 @@ final readonly class HttpDriver
      * @param  Closure(array<string, mixed>): void|null  $session  Applies session data to the next request; null when the test case exposes no session.
      * @param  bool  $freshUsers  Reload a saved Eloquent user before each request, as production resolves it from the session.
      * @param  bool  $isolatedRequests  Clear Laravel Context and scoped container instances before each request, as a production request starts without them.
+     * @param  list<Closure(TestResponse<Response>): void>  $responsePolicies  Called with every response, in order; one that throws fails the request's step.
      */
     public function __construct(
         private Closure $authenticate,
@@ -33,12 +34,50 @@ final readonly class HttpDriver
         private ?Closure $session = null,
         private bool $freshUsers = false,
         private bool $isolatedRequests = false,
+        private array $responsePolicies = [],
     ) {}
 
     /** A copy of this driver that reloads a saved Eloquent user before each request. */
     public function withFreshUsers(): self
     {
-        return new self($this->authenticate, $this->json, $this->form, $this->session, true, $this->isolatedRequests);
+        return $this->copy(freshUsers: true);
+    }
+
+    /**
+     * A copy of this driver that also checks every response with $policy:
+     * throwing (a failed assertion, say) fails the step that made the request.
+     *
+     * @param  Closure(TestResponse<Response>): void  $policy
+     */
+    public function withResponsePolicy(Closure $policy): self
+    {
+        return $this->copy(responsePolicies: [...$this->responsePolicies, $policy]);
+    }
+
+    /**
+     * Check a response against every response policy.
+     *
+     * @param  TestResponse<Response>  $response
+     */
+    public function inspect(TestResponse $response): void
+    {
+        foreach ($this->responsePolicies as $policy) {
+            $policy($response);
+        }
+    }
+
+    /** @param  list<Closure(TestResponse<Response>): void>|null  $responsePolicies */
+    private function copy(?bool $freshUsers = null, ?bool $isolatedRequests = null, ?array $responsePolicies = null): self
+    {
+        return new self(
+            $this->authenticate,
+            $this->json,
+            $this->form,
+            $this->session,
+            $freshUsers ?? $this->freshUsers,
+            $isolatedRequests ?? $this->isolatedRequests,
+            $responsePolicies ?? $this->responsePolicies,
+        );
     }
 
     /**
@@ -48,7 +87,7 @@ final readonly class HttpDriver
      */
     public function withIsolatedRequests(): self
     {
-        return new self($this->authenticate, $this->json, $this->form, $this->session, true, true);
+        return $this->copy(freshUsers: true, isolatedRequests: true);
     }
 
     /** Authenticate the next request; every actor request calls this first. */

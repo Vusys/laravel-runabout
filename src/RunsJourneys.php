@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\Response;
 use Vusys\Runabout\Support\RollBack;
 
 /** Mix into a Laravel/Testbench TestCase to run journeys inside tests. */
@@ -22,7 +23,8 @@ trait RunsJourneys
 
         return (new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
             ->watchingTransactionsOn([null])
-            ->withStateResets($this->journeyStateResets());
+            ->withStateResets($this->journeyStateResets())
+            ->withResponsePolicy($this->journeyResponsePolicy(...));
     }
 
     /**
@@ -41,8 +43,18 @@ trait RunsJourneys
 
         return (new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
             ->watchingTransactionsOn([null])
-            ->withStateResets($this->journeyStateResets());
+            ->withStateResets($this->journeyStateResets())
+            ->withResponsePolicy($this->journeyResponsePolicy(...));
     }
+
+    /**
+     * Called with every actor response. Throw (or fail an assertion) to fail
+     * the step that made the request: an app-wide rule such as "no request is
+     * answered with a server error". The default accepts every response.
+     *
+     * @param  TestResponse<Response>  $response
+     */
+    protected function journeyResponsePolicy(TestResponse $response): void {}
 
     /**
      * Resets to run after every trail, for state a database rollback doesn't

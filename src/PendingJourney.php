@@ -8,7 +8,10 @@ use Closure;
 use Generator;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Util\ExcludeList;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
@@ -104,6 +107,40 @@ final class PendingJourney
     public function watchingTransactionsOn(array $connections): self
     {
         $this->resetConnections = $connections;
+
+        return $this;
+    }
+
+    /**
+     * Fail the step whose actor request is answered with a server error
+     * (status 500 or above), unless the status is in $allowing. A user action
+     * rarely has a correct outcome that is a server error, and without this
+     * one goes unnoticed unless the step checks the status itself.
+     *
+     * @param  list<int>  $allowing  Server error statuses the journey expects, such as 503.
+     */
+    public function failOnServerErrors(array $allowing = []): self
+    {
+        $this->http = $this->http?->withResponsePolicy(function (TestResponse $response) use ($allowing): void {
+            $status = $response->getStatusCode();
+
+            if ($status >= 500 && ! in_array($status, $allowing, true)) {
+                throw new RuntimeException(sprintf('An actor request was answered with a server error (%d).', $status));
+            }
+        });
+
+        return $this;
+    }
+
+    /**
+     * @internal Check every actor response with the test case's policy
+     * (RunsJourneys::journeyResponsePolicy()).
+     *
+     * @param  Closure(TestResponse<Response>): void  $policy
+     */
+    public function withResponsePolicy(Closure $policy): self
+    {
+        $this->http = $this->http?->withResponsePolicy($policy);
 
         return $this;
     }

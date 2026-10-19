@@ -113,6 +113,26 @@ $this->journey(SomeJourney::class)->isolateRequests()->run();
 - State a step sets directly (outside a request) is cleared before the step's next request too. If a journey sets `Context` in `aroundStep()` to emulate middleware, leave this off.
 - It's off by default, so existing outcomes don't change.
 
+## Failing on server errors
+
+A server error caused by a user action is almost never a correct outcome, but a journey only notices one if a step checks the status. Call `failOnServerErrors()` to fail the step whose actor request is answered with a status of 500 or above:
+
+```php
+$this->journey(SomeJourney::class)->failOnServerErrors()->run();
+$this->journey(SomeJourney::class)->failOnServerErrors(allowing: [503])->run();   // a maintenance-mode step
+```
+
+The failure names the status, and, like any step failure, ends with the [last response](reproducing-failures.md#when-a-steps-request-was-rejected). It's off by default.
+
+For an app-wide rule of your own, override `journeyResponsePolicy()` on the test case. It's called with every actor response, including requests invariants make; throw, or fail an assertion, to fail the step:
+
+```php
+protected function journeyResponsePolicy(TestResponse $response): void
+{
+    Assert::assertNotSame(419, $response->getStatusCode(), 'A form was posted without a CSRF token.');
+}
+```
+
 ## Carrying session / tenancy state
 
 If your app carries tenancy (or anything else) in the session, attach it to the actor and it rides along with every request that actor makes — driving the full middleware stack, no per-request session juggling:
