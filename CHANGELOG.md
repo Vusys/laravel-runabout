@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Added
+
+- A failed step that made an actor request now ends its failure message with the last response it received: the request's method and URI, the status, a redirect's target, and the validation errors flashed to the session or the start of the body. Most failed step assertions in an HTTP journey mean the app rejected the request for an unexpected reason, and finding out which used to mean adding debug output to the step and replaying. Invariant failures, and steps that made no request, are unchanged. ([#70](https://github.com/Vusys/laravel-runabout/issues/70))
+
 ### Changed
 
 - Each passing invariant check now counts as one PHPUnit assertion. Built-in invariants signal a violation by throwing, so a journey checked only by invariants performed "no assertions", and PHPUnit reported it as risky even after thousands of checks. `RunsJourneys::journeyAssertionCounter()` supplies the counter; override it to return `null` to keep the old count. Trails and seeds are unchanged. ([#71](https://github.com/Vusys/laravel-runabout/issues/71))

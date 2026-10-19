@@ -40,6 +40,9 @@ final class Context
 
     private bool $checkingInvariants = false;
 
+    /** @var TestResponse<Response>|null The response of the running step's most recent actor request. */
+    private ?TestResponse $stepResponse = null;
+
     private bool $clockUnwindRegistered = false;
 
     private DrawSource $source;
@@ -294,9 +297,26 @@ final class Context
         // trail, so it must not become the response a step asserts on.
         if (! $this->checkingInvariants) {
             $this->lastResponse = $response;
+            $this->stepResponse = $response;
         }
 
         return $response;
+    }
+
+    /** @internal Forget the previous step's response before the next execution runs. */
+    public function beginExecution(): void
+    {
+        $this->stepResponse = null;
+    }
+
+    /**
+     * @internal The response of the running step's most recent actor request, null when it made none.
+     *
+     * @return TestResponse<Response>|null
+     */
+    public function stepResponse(): ?TestResponse
+    {
+        return $this->stepResponse;
     }
 
     /**

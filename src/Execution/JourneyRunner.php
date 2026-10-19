@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Execution;
 
 use Closure;
+use Illuminate\Testing\TestResponse;
 use Random\Randomizer;
 use Throwable;
 use Vusys\Runabout\Context;
@@ -19,6 +20,7 @@ use Vusys\Runabout\Randomness\SeedSchema;
 use Vusys\Runabout\Randomness\StreamDrawSource;
 use Vusys\Runabout\Replay\TrailToken;
 use Vusys\Runabout\Step;
+use Vusys\Runabout\Support\ResponseSummary;
 use Vusys\Runabout\Trail;
 
 /** @internal */
@@ -376,8 +378,20 @@ final readonly class JourneyRunner
         $trail->record($instance->label, $step->name(), $runIndex);
         $instance->context->useSource($source);
 
+        $instance->context->beginExecution();
+
         try {
-            $this->wrapped($instance, fn () => $step->execute($instance->context));
+            try {
+                $this->wrapped($instance, fn () => $step->execute($instance->context));
+            } catch (Throwable $caught) {
+                $response = $instance->context->stepResponse();
+
+                if ($response instanceof TestResponse) {
+                    $trail->noteFailedStepResponse(ResponseSummary::of($response));
+                }
+
+                throw $caught;
+            }
 
             foreach ($instances as $owner) {
                 if ($owner->invariants === []) {
