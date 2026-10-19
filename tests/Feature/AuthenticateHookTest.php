@@ -31,6 +31,7 @@ final class AuthenticateHookTest extends JourneyTestCase
     protected function defineRoutes($router): void
     {
         $router->get('/whoami', fn (): JsonResponse => new JsonResponse([
+            'default' => Auth::getDefaultDriver(),
             'web' => Auth::guard('web')->id(),
             'api' => Auth::guard('api')->id(),
             'token' => Auth::guard('api')->user()?->getAttribute('token'),
@@ -46,6 +47,8 @@ final class AuthenticateHookTest extends JourneyTestCase
         if ($guard === 'api') {
             $user->setAttribute('token', 'orders:write');
             Auth::guard('api')->setUser($user);
+            // As Sanctum::actingAs() and Passport::actingAs() do.
+            Auth::shouldUse('api');
 
             return;
         }
@@ -72,9 +75,9 @@ final class AuthenticateHookTest extends JourneyTestCase
             {
                 return [
                     Step::make('shop')->act(fn (Context $ctx) => $ctx->as('shopper')->getJson('/whoami')
-                        ->assertExactJson(['web' => $this->shopper->id, 'api' => null, 'token' => null])),
+                        ->assertExactJson(['default' => 'web', 'web' => $this->shopper->id, 'api' => null, 'token' => null])),
                     Step::make('integrate')->act(fn (Context $ctx) => $ctx->as('integration')->getJson('/whoami')
-                        ->assertExactJson(['web' => null, 'api' => $this->integration->id, 'token' => 'orders:write'])),
+                        ->assertExactJson(['default' => 'web', 'web' => null, 'api' => $this->integration->id, 'token' => 'orders:write'])),
                 ];
             }
         })->shuffles(0)->run();

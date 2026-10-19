@@ -137,6 +137,12 @@ trait RunsJourneys
                 } else {
                     $this->journeyAuthenticate($user, $guard);
                 }
+
+                // After authenticating: a helper such as Passport::actingAs()
+                // also makes its guard the default.
+                if ($named) {
+                    Auth::shouldUse($default);
+                }
             },
             json: fn (string $method, string $uri, array $data, array $headers): TestResponse => $this->json($method, $uri, $data, $headers),
             form: fn (string $method, string $uri, array $data, array $headers): TestResponse => match ($method) {

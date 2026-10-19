@@ -92,7 +92,7 @@ protected function journeyAuthenticate(Authenticatable $user, ?string $guard): v
 }
 ```
 
-For Passport, `Passport::actingAs($user, ['orders:write'], 'api')` attaches scopes the same way. `parent::` reaches the default when `RunsJourneys` is used on a base test case. On a test case that uses the trait directly, alias the default instead: `use RunsJourneys { journeyAuthenticate as defaultJourneyAuthenticate; }`. Both helpers also make their guard the default, which Runabout undoes before the next request.
+For Passport, `Passport::actingAs($user, ['orders:write'], 'api')` attaches scopes the same way. `parent::` reaches the default when `RunsJourneys` is used on a base test case. On a test case that uses the trait directly, alias the default instead: `use RunsJourneys { journeyAuthenticate as defaultJourneyAuthenticate; }`. Both helpers also make their guard the default, which Runabout undoes before the request is sent.
 
 ## Reloading users before each request
 
