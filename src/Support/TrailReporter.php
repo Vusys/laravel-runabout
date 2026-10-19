@@ -57,6 +57,12 @@ final class TrailReporter
         };
     }
 
+    /** Write a line of run output to STDERR. */
+    public static function write(string $text): void
+    {
+        fwrite(STDERR, $text);
+    }
+
     /** Print the aggregate coverage summary once the run has finished. */
     public static function printCoverage(string $journeys, TrailCoverage $coverage): void
     {

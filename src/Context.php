@@ -17,6 +17,7 @@ use UnitEnum;
 use Vusys\Runabout\Execution\DeferredStack;
 use Vusys\Runabout\Randomness\DrawSource;
 use Vusys\Runabout\Randomness\StreamDrawSource;
+use Vusys\Runabout\Support\Races;
 
 /**
  * The mutable bag threaded through a single trail: remembered values, run
@@ -410,6 +411,34 @@ final class Context
         } finally {
             $this->checkingInvariants = false;
         }
+    }
+
+    /**
+     * Run $request with a check-then-act race injected: at an unlocked read of
+     * $table during the request (the first, usually; which one is a seeded
+     * draw, so it replays and shrinks), $competitor runs before the app can
+     * act on what it read, as a parallel request landing in that window would.
+     * A read with a row lock (FOR UPDATE, FOR SHARE) is never interfered with,
+     * as a real lock would hold the competitor back. Invariants judge the
+     * result. Have the competitor call the app's own code, so it writes what
+     * a real request would.
+     *
+     * Needs a driver that writes lock clauses into its SQL: MySQL, MariaDB or
+     * Postgres. On SQLite the request runs without interference, and the run
+     * says so once.
+     *
+     * @template T
+     *
+     * @param  Closure(): mixed  $competitor
+     * @param  Closure(): T  $request
+     * @return T The request's result.
+     */
+    public function racing(string $table, Closure $competitor, Closure $request): mixed
+    {
+        // Interfere at each unlocked read with probability 3/4, so the first
+        // read is raced most often and shrinking (towards 0) moves the race
+        // to the earliest read that still fails.
+        return Races::race($table, $competitor, $request, fn (): bool => $this->randomInt(0, 3) < 3);
     }
 
     /**
