@@ -113,6 +113,20 @@ final readonly class HttpDriver
     }
 
     /**
+     * Send the next request as a guest: log out the default guard, and every
+     * guard an actor has used. A token actor calls this so a session login
+     * left by another actor can't shadow its bearer token.
+     */
+    public function authenticateGuest(): void
+    {
+        if ($this->isolatedRequests) {
+            FrameworkState::flushRequestState();
+        }
+
+        ($this->authenticate)(null, null);
+    }
+
+    /**
      * Apply an actor's session data to the next request. A no-op for empty
      * session data; a clear error if an actor carries session but the driver
      * was built without a session hook.
