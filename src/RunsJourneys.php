@@ -75,6 +75,23 @@ trait RunsJourneys
     }
 
     /**
+     * Logs an actor in before each of its requests: on the default guard
+     * (null) with actingAs(), on a named guard with setUser() alone. Override
+     * it for guards that need more, such as a token guard whose app reads
+     * abilities or a tenant off the current access token:
+     *
+     *     $guard === 'api' ? Sanctum::actingAs($user, ['orders:write'], 'api') : parent::journeyAuthenticate($user, $guard);
+     */
+    protected function journeyAuthenticate(Authenticatable $user, ?string $guard): void
+    {
+        if ($guard === null) {
+            $this->actingAs($user);
+        } else {
+            Auth::guard($guard)->setUser($user);
+        }
+    }
+
+    /**
      * Adapts this test case's HTTP methods (Laravel's MakesHttpRequests) so
      * actors inside steps can make authenticated requests through it.
      *
@@ -117,10 +134,8 @@ trait RunsJourneys
                     if (method_exists($resolved, 'forgetUser')) {
                         $resolved->forgetUser();
                     }
-                } elseif ($guard === null) {
-                    $this->actingAs($user);
                 } else {
-                    Auth::guard($guard)->setUser($user);
+                    $this->journeyAuthenticate($user, $guard);
                 }
             },
             json: fn (string $method, string $uri, array $data, array $headers): TestResponse => $this->json($method, $uri, $data, $headers),
