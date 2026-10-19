@@ -46,6 +46,9 @@ final class PendingJourney
 
     private bool $isolatedTrails = false;
 
+    /** @var list<list<string>> Orderings of step names alsoTrails() runs on every run. */
+    private array $namedTrails = [];
+
     /** @var list<array{string|null, float}> requireEffect() calls: a step name (null for every step) and the share of runs that must take effect. */
     private array $effectRequirements = [];
 
@@ -201,6 +204,26 @@ final class PendingJourney
     public function withStateResets(array $resets): self
     {
         $this->stateResets = $resets;
+
+        return $this;
+    }
+
+    /**
+     * Run these orderings on every run, after the canonical trail and before
+     * the shuffles. Each is a list of step names, run in that order with the
+     * canonical trail's seeded draws; a repeated name is the step's next run.
+     * In an interleaved run, prefix each name with its instance label:
+     * "A: draft post". Use it to keep a risky ordering, or one a fixed bug
+     * needed, in every run instead of hoping the shuffles reach it. An
+     * ordering a step's constraints rule out fails the run.
+     *
+     * @param  list<string>  ...$orderings
+     */
+    public function alsoTrails(array ...$orderings): self
+    {
+        foreach ($orderings as $ordering) {
+            $this->namedTrails[] = $ordering;
+        }
 
         return $this;
     }
@@ -549,8 +572,12 @@ final class PendingJourney
             return;
         }
 
-        $this->registerVerbosePrinter(total: 1 + $this->shuffles);
+        $this->registerVerbosePrinter(total: 1 + count($this->namedTrails) + $this->shuffles);
         $this->runTrail($runner, $this->deriveSeed(0), shuffle: false);
+
+        foreach ($this->namedTrails as $index => $names) {
+            $this->runNamedTrail($runner, $index + 1, $names);
+        }
 
         for ($i = 1; $i <= $this->shuffles; $i++) {
             $this->runTrail($runner, $this->deriveSeed($i), shuffle: true);
@@ -1030,6 +1057,69 @@ final class PendingJourney
         }
 
         return crc32(implode('+', array_map(fn (Journey $journey): string => $journey::class, $this->journeys)).'#'.$index);
+    }
+
+    /**
+     * Run one alsoTrails() ordering. It replays like an artifact, so a
+     * failure prints the RUNABOUT_TRAIL that reproduces it.
+     *
+     * @param  list<string>  $names
+     */
+    private function runNamedTrail(JourneyRunner $runner, int $number, array $names): void
+    {
+        $tokens = $this->tokensNamed($number, $names);
+        $trail = null;
+
+        try {
+            $this->resetAround(function () use ($runner, $tokens, &$trail): void {
+                $trail = $runner->runTokens($this->journeys, $this->deriveSeed(0), $tokens, $this->http);
+            });
+        } catch (OrderNotViableException $notViable) {
+            throw new InvalidJourneyException(sprintf(
+                'alsoTrails() ordering %d is not viable: %s Check the step\'s name, and that its after()/when() constraints allow it at that point.',
+                $number,
+                $notViable->getMessage(),
+            ), $notViable->getCode(), previous: $notViable);
+        }
+
+        if ($trail instanceof Trail) {
+            $this->notify($trail);
+        }
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @return list<TrailToken>
+     */
+    private function tokensNamed(int $number, array $names): array
+    {
+        if ($names === []) {
+            throw new InvalidJourneyException(sprintf('alsoTrails() ordering %d is empty.', $number));
+        }
+
+        $interleaved = count($this->journeys) > 1;
+        $runs = [];
+        $tokens = [];
+
+        foreach ($names as $name) {
+            $label = null;
+            $step = $name;
+
+            if ($interleaved) {
+                $parts = explode(': ', $name, 2);
+
+                if (count($parts) !== 2 || ! ctype_upper($parts[0])) {
+                    throw new InvalidJourneyException(sprintf('alsoTrails() ordering %d names "%s" without an instance label; in an interleaved run write it as "A: %s".', $number, $name, $name));
+                }
+
+                [$label, $step] = $parts;
+            }
+
+            $runs[$name] = ($runs[$name] ?? 0) + 1;
+            $tokens[] = new TrailToken($label, $step, $runs[$name]);
+        }
+
+        return $tokens;
     }
 
     /**

@@ -33,6 +33,27 @@ Biases the picker toward repeatable steps (5× by default). This is the **idempo
 
 Keeps each shuffled trail going until it holds at least `$executions` step executions, not just until every step's minimum is met. A trail with no eligible step left ends early instead of failing. Use it with journeys made mostly of [`optional()`](steps.md) steps: without it, a shuffled trail stops as soon as its few required steps have run, and the shuffles collapse into a handful of short, repeated orderings. The canonical trail is unaffected. The default, 0, leaves trails, and therefore existing seeds, unchanged.
 
+## `alsoTrails(array ...$orderings)`
+
+Some bugs need a specific ordering of four or five steps, which shuffles reach only occasionally: a journey can stay green at 30 or 200 shuffles and fail at 500. Once you know an ordering is risky (a hunch, or the ordering a fixed bug needed), keep it in every run:
+
+```php
+$this->journey(PostLifecycleJourney::class)
+    ->alsoTrails(
+        ['draft post', 'publish post', 'lock post', 'cast vote'],
+        ['draft post', 'publish post', 'cast vote', 'cast vote'],
+    )
+    ->run();
+```
+
+- Each ordering is a list of step names, run in that order after the canonical trail and before the shuffles. A repeated name is that step's next run.
+- Draws come from the canonical trail's seed, so a step's values match its canonical run.
+- A failure prints the `RUNABOUT_TRAIL` artifact that replays it.
+- An ordering that names an unknown step, or that a step's `after()`/`when()` constraints rule out, fails the run, so the list can't go stale without anyone noticing.
+- In an [interleaved](interleaving.md) run, prefix each name with its instance label: `'B: draft post'`.
+
+It doesn't change the shuffles, so every seed still replays the same trail.
+
 ## `exhaustive(int $limit = 720)`
 
 Runs **every** valid ordering rather than sampling, and throws if the journey has more than `$limit` orderings (default 720). Suits small journeys where you'd rather prove every ordering than hope the seeds covered them. Not available for [interleaved](interleaving.md) journeys.

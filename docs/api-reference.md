@@ -64,6 +64,7 @@ The fluent runner returned by `journey()` / `interleave()`. See [Execution modes
 public function shuffles(int $count): self                         // default 10
 public function repeatHeavy(int $bias = 5): self
 public function minLength(int $executions): self                   // default 0: stop once minimums are met
+public function alsoTrails(array ...$orderings): self             // list<string> step names each, run on every run
 public function freshActors(): self                                // reload each actor's user before every request
 public function isolateRequests(): self                            // clear Context and scoped instances before every request, and reload users
 public function isolateTrails(): self                              // reset array caches, Context, scoped instances and guards after every trail
