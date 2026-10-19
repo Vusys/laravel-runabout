@@ -159,6 +159,10 @@ If trail 1 passes and trail 2 fails on missing data, the setup almost certainly 
 
 The mirror image — trail 2 failing because trail 1's rows are *still there* — means the code under test commits its own transactions, so the wrapping rollback can't undo them. Switch to `resetByTruncating()`.
 
+## A value set by one request is still visible to later ones
+
+Laravel `Context` and scoped bindings outlive the request that set them in a test process, unlike production. Call [`isolateRequests()`](actors-http.md#isolating-each-request) to clear them before every actor request.
+
 ## A step "ended the trail's database transaction"
 
 The step ran something that committed the trail's transaction, almost always a schema change on MySQL or MariaDB, which commits implicitly. See [Schema changes inside a trail](database-resets.md#schema-changes-inside-a-trail). If the reset itself reports `Rolling back the trail's transaction … failed`, the same thing happened somewhere Runabout doesn't check, such as inside a custom `wrapTrail()`.
