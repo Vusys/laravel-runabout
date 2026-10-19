@@ -7,6 +7,9 @@ namespace Vusys\Runabout\Support;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\Repository;
 use Illuminate\Container\Container;
+use Illuminate\Log\Context\Repository as ContextRepository;
+use Illuminate\Support\Facades\Context as ContextFacade;
+use Illuminate\Support\Facades\Facade;
 use ReflectionProperty;
 
 /**
@@ -32,13 +35,15 @@ final class FrameworkState
     {
         $app = Container::getInstance();
 
-        // Flush the instance the Context facade already holds before forgetting
-        // it: the facade caches what it resolved and would keep the old one.
-        if ($app->bound(\Illuminate\Log\Context\Repository::class)) {
-            $app->make(\Illuminate\Log\Context\Repository::class)->flush();
+        // Flush the Context the facade holds (it caches what it resolved, so
+        // after an earlier forget the container may already hold a newer
+        // instance), forget scoped instances, then let the facade re-resolve.
+        if ($app->bound(ContextRepository::class)) {
+            ContextFacade::flush();
         }
 
         $app->forgetScopedInstances();
+        Facade::clearResolvedInstance(ContextRepository::class);
     }
 
     /** Log every resolved auth guard out. */
@@ -68,8 +73,8 @@ final class FrameworkState
         $app = Container::getInstance();
         $context = 0;
 
-        if ($app->bound(\Illuminate\Log\Context\Repository::class)) {
-            $repository = $app->make(\Illuminate\Log\Context\Repository::class);
+        if ($app->bound(ContextRepository::class)) {
+            $repository = $app->make(ContextRepository::class);
             $context = count($repository->all()) + count($repository->allHidden());
         }
 
