@@ -21,6 +21,18 @@ The output names the mode and seed, prints the full trail with the failing step 
 
 Below that, PHPUnit prints the exception's causes: the `InvariantViolationException` naming the invariant and step, then your assertion with its comparison diff. Runabout's own frames are left out of those stack traces, the way PHPUnit already leaves out vendor code, so each trace points at lines in your journey and test. The first frame under the assertion is the line that failed.
 
+### When a step's request was rejected
+
+If the failing step made an actor request, the message also describes the last response that step received, because a failed step assertion in an HTTP journey usually means the app rejected the request for a reason you didn't expect:
+
+```
+Expected response status code [201] but received 422.
+Last response (POST /posts): 422
+  body: {"message":"The title field is required.","errors":{"title":["The title field is required."]}}
+```
+
+It shows the request's method and URI, the status, the target of a redirect, and either the validation errors flashed to the session or the start of the body (300 characters). An invariant failure doesn't show it, and neither does a step that made no request of its own.
+
 ## Replaying by seed
 
 ```bash

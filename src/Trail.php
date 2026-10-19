@@ -23,11 +23,26 @@ final class Trail
     /** @var array<int, bool> Whether each token's draws were value-forced (pinned), keyed by token index. */
     private array $pinned = [];
 
+    /** A summary of the response the failing step last received, null when it made no request. */
+    private ?string $failedStepResponse = null;
+
     /** @param 'canonical'|'shuffled'|'repeat-heavy'|'exhaustive'|'replayed' $mode */
     public function __construct(
         private readonly int $seed,
         private readonly string $mode,
     ) {}
+
+    /** @internal Note the response the failing step last received, for the failure message. */
+    public function noteFailedStepResponse(string $summary): void
+    {
+        $this->failedStepResponse = $summary;
+    }
+
+    /** @internal */
+    public function failedStepResponse(): ?string
+    {
+        return $this->failedStepResponse;
+    }
 
     /** @internal Record one execution. The run index is the stream key, not a positional recount. */
     public function record(?string $label, string $step, int $run): void

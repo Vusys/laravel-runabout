@@ -30,6 +30,10 @@ final class JourneyFailedException extends RuntimeException
             self::reason($cause),
         );
 
+        if ($trail->failedStepResponse() !== null) {
+            $message .= "\n".$trail->failedStepResponse();
+        }
+
         // The canonical order reproduces by simply running again; a seeded
         // replay would run a shuffled trail instead and take a different path.
         // A replayed trail carries its own order, so it replays as an artifact.
