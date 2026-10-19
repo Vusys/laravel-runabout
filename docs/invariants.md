@@ -33,7 +33,7 @@ public function invariants(): array
 
 ## Built-in invariants
 
-Every built-in is a static factory on `Vusys\Runabout\Invariants` returning an `Invariant`.
+Every built-in is a static factory on `Vusys\Runabout\Invariants` returning an `Invariant`. Each takes an optional `name:` that replaces its generated name, for a short, stable one to refer to in [`knownIssue()`](reproducing-failures.md#known-issues-knownissue).
 
 ### `cachedColumnMatches($model, $column, $expected)`
 

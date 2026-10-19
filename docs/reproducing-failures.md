@@ -104,4 +104,25 @@ For a long artifact, read it from a file with `RUNABOUT_TRAIL=@path.json`. In co
 
 This works because each execution's random draws depend only on which execution it is, not on what ran before it (value shrinking pins the minimised draws in the artifact's optional fourth element). That position-independence is also what lets shrinking be sound: removing a step never shifts the survivors' draws.
 
+## Known issues: `knownIssue()`
+
+A journey that keeps failing on a bug you've already filed stops looking for new ones: every run ends at the same failure. `knownIssue()` tolerates it while it's being fixed, so exploration carries on past it:
+
+```php
+$this->journey(new OrderJourney)
+    ->shuffles(200)
+    ->knownIssue('orders.total matches its lines', reason: 'ticket 812')
+    ->knownIssue(step: 'refund order', throwing: QueryException::class)
+    ->run();
+```
+
+Name an invariant (its name, or the `Invariant` itself), or a step, the exception class it throws (subclasses included), or both. Failure messages aren't matched, because their wording isn't covered by the stability promise. Pass `name:` to a built-in invariant to give it a short, stable name to refer to.
+
+- The first time a known issue fires, its trail is shrunk and recorded as usual. A known invariant is then no longer checked for the rest of the run. A known step failure ends each trail it fires in, and the run moves on to the next trail.
+- A run where only known issues fired is **skipped**. The skip message lists each one, how many trails it fired in, and its first shrunk failure with the `RUNABOUT_TRAIL` that replays it.
+- A new failure fails the run as normal, with the known issues that also fired listed after it.
+- A known issue that never fires prints a warning on stderr, asking whether it's been fixed. `->strictKnownIssues()` fails the run instead. The default is a warning because a short run can miss a bug that is still there.
+
+Replaying with `seed()`, `trail()`, `RUNABOUT_SEED` or `RUNABOUT_TRAIL` ignores known issues, so the failure reproduces while you debug it.
+
 See [Environment variables](environment.md) for the full list of `RUNABOUT_*` settings.

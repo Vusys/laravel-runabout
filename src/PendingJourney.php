@@ -52,6 +52,14 @@ final class PendingJourney
     /** @var list<array{string|null, float}> requireEffect() calls: a step name (null for every step) and the share of runs that must take effect. */
     private array $effectRequirements = [];
 
+    /** @var list<array{invariant: string|null, step: string|null, throwing: class-string<Throwable>|null, reason: string, hits: int, report: string}> knownIssue() calls, with what this run saw of each. */
+    private array $knownIssues = [];
+
+    private bool $strictKnownIssues = false;
+
+    /** @var (Closure(string): never)|null Skips the test with a message; RunsJourneys passes markTestSkipped(). */
+    private ?Closure $skipper = null;
+
     /** @var list<Closure(): void> App-specific resets run after every trail (RunsJourneys::journeyStateResets()). */
     private array $stateResets = [];
 
@@ -229,6 +237,63 @@ final class PendingJourney
     }
 
     /** How many seeded shuffled trails to run after the canonical one. */
+    /**
+     * Tolerate a bug you already know about, so the journey keeps exploring
+     * for new ones while it is being fixed. Name an invariant (its name, or
+     * the Invariant itself), or a step and/or the exception class it throws.
+     * The first time it fires it is shrunk and recorded, and the invariant is
+     * no longer checked for the rest of the run; later hits are counted. A
+     * run whose only failures are known issues is skipped, listing each one
+     * and how to replay it; a new failure still fails, with the known hits
+     * noted. A known issue that never fires prints a warning (has it been
+     * fixed?), or fails the run under strictKnownIssues(). Replaying a seed or
+     * trail ignores known issues, so the failure reproduces.
+     *
+     * @param  class-string<Throwable>|null  $throwing
+     */
+    public function knownIssue(string|Invariant|null $invariant = null, ?string $step = null, ?string $throwing = null, string $reason = ''): self
+    {
+        if ($invariant === null && $step === null && $throwing === null) {
+            throw new InvalidJourneyException('knownIssue() needs an invariant, or a step and/or the exception class it throws.');
+        }
+
+        if ($invariant !== null && ($step !== null || $throwing !== null)) {
+            throw new InvalidJourneyException('knownIssue() matches an invariant, or a step and/or the exception class it throws, not both. Declare them as separate known issues.');
+        }
+
+        $this->knownIssues[] = [
+            'invariant' => $invariant instanceof Invariant ? $invariant->name() : $invariant,
+            'step' => $step,
+            'throwing' => $throwing,
+            'reason' => $reason,
+            'hits' => 0,
+            'report' => '',
+        ];
+
+        return $this;
+    }
+
+    /** Fail the run when a knownIssue() did not fire, instead of warning. */
+    public function strictKnownIssues(): self
+    {
+        $this->strictKnownIssues = true;
+
+        return $this;
+    }
+
+    /**
+     * @internal How a run whose only failures are known issues is skipped;
+     * RunsJourneys passes the test case's markTestSkipped().
+     *
+     * @param  Closure(string): never  $skipper
+     */
+    public function skippingWith(Closure $skipper): self
+    {
+        $this->skipper = $skipper;
+
+        return $this;
+    }
+
     public function shuffles(int $count): self
     {
         $this->shuffles = $count;
@@ -465,7 +530,13 @@ final class PendingJourney
             $this->onTrail($effects->record(...));
         }
 
-        $this->execute();
+        try {
+            $this->execute();
+        } catch (JourneyFailedException $failure) {
+            $hits = $this->describeKnownHits();
+
+            throw $hits === null ? $failure : $failure->withNote("Known issues also fired in this run:\n".$hits);
+        }
 
         if ($coverage instanceof TrailCoverage) {
             TrailReporter::printCoverage($this->names(), $coverage);
@@ -474,6 +545,124 @@ final class PendingJourney
         if ($effects instanceof TrailCoverage) {
             $this->checkEffects($effects);
         }
+
+        $this->settleKnownIssues();
+    }
+
+    /**
+     * Whether a failure is a knownIssue(): if so it is recorded (shrunk, on
+     * its first hit, through $report) and suppressed for the rest of the run.
+     *
+     * @param  Closure(): JourneyFailedException  $report
+     */
+    private function absorbsKnownIssue(JourneyRunner $runner, JourneyFailedException $failure, Closure $report): bool
+    {
+        $signature = FailureSignature::from($failure);
+        $cause = $failure->getPrevious();
+        $name = $this->unlabelled($signature->name);
+
+        foreach ($this->knownIssues as $index => $issue) {
+            $matches = $signature->kind === 'invariant'
+                ? $issue['invariant'] === $name
+                : $issue['invariant'] === null
+                    && ($issue['step'] === null || $issue['step'] === $name)
+                    && ($issue['throwing'] === null || $cause instanceof $issue['throwing']);
+
+            if (! $matches) {
+                continue;
+            }
+
+            if ($issue['hits'] === 0) {
+                $reported = $report();
+                $issue['report'] = $reported->getMessage();
+
+                // Re-running reproduces the canonical order, but a re-run skips a
+                // known issue, so give the artifact that replays it regardless.
+                if ($reported->trail()->mode() === 'canonical') {
+                    $issue['report'] .= sprintf("\nReplay with RUNABOUT_TRAIL='%s'.", json_encode($reported->trail()->artifact()));
+                }
+            }
+
+            $issue['hits']++;
+            $this->knownIssues[$index] = $issue;
+
+            if ($issue['invariant'] !== null) {
+                $runner->suppressInvariant($issue['invariant']);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /** A step or invariant name without its interleaved instance label ("A: "). */
+    private function unlabelled(string $name): string
+    {
+        return count($this->journeys) > 1 ? explode(': ', $name, 2)[1] ?? $name : $name;
+    }
+
+    private function describeKnownIssue(int $index): string
+    {
+        $issue = $this->knownIssues[$index];
+        $subject = match (true) {
+            $issue['invariant'] !== null => sprintf('invariant "%s"', $issue['invariant']),
+            $issue['step'] !== null && $issue['throwing'] !== null => sprintf('step "%s" throwing %s', $issue['step'], $issue['throwing']),
+            $issue['step'] !== null => sprintf('step "%s"', $issue['step']),
+            default => sprintf('a step throwing %s', $issue['throwing']),
+        };
+
+        return $issue['reason'] === '' ? $subject : sprintf('%s (%s)', $subject, $issue['reason']);
+    }
+
+    /** Each known issue that fired, its hit count and first (shrunk) report; null when none did. */
+    private function describeKnownHits(): ?string
+    {
+        $lines = [];
+
+        foreach ($this->knownIssues as $index => $issue) {
+            if ($issue['hits'] > 0) {
+                $lines[] = sprintf("- %s, %d %s. First hit:\n%s", $this->describeKnownIssue($index), $issue['hits'], $issue['hits'] === 1 ? 'trail' : 'trails', $issue['report']);
+            }
+        }
+
+        return $lines === [] ? null : implode("\n", $lines);
+    }
+
+    /** Warn about (or, strictly, fail on) known issues that never fired, then skip the test if any did. */
+    private function settleKnownIssues(): void
+    {
+        $unfired = [];
+
+        foreach ($this->knownIssues as $index => $issue) {
+            if ($issue['hits'] === 0) {
+                $unfired[] = $this->describeKnownIssue($index);
+            }
+        }
+
+        if ($unfired !== []) {
+            $message = sprintf('Journey %s: known issue %s did not reproduce in this run; has it been fixed?', $this->names(), implode('; ', $unfired));
+
+            if ($this->strictKnownIssues) {
+                throw new RuntimeException($message.' Remove the knownIssue(), or drop strictKnownIssues() if the run is too short to reach it reliably.');
+            }
+
+            TrailReporter::write("\n[runabout] ".$message."\n");
+        }
+
+        $hits = $this->describeKnownHits();
+
+        if ($hits === null) {
+            return;
+        }
+
+        $message = sprintf("Journey %s failed only on known issues:\n%s", $this->names(), $hits);
+
+        if (! $this->skipper instanceof Closure) {
+            throw new RuntimeException($message);
+        }
+
+        ($this->skipper)($message);
     }
 
     /** Fail the run when a requireEffect() requirement isn't met. */
@@ -556,6 +745,10 @@ final class PendingJourney
         $environmentTrail = Environment::trail();
         $artifact = $this->trailArtifact ?? ($environmentTrail === null ? null : TrailArtifact::decode($environmentTrail));
 
+        if ($artifact !== null || $this->seed !== null || Environment::seed() !== null) {
+            $this->knownIssues = [];
+        }
+
         if ($artifact !== null) {
             $this->registerVerbosePrinter(total: 1);
             $this->replay($runner, $artifact);
@@ -597,6 +790,10 @@ final class PendingJourney
         } catch (JourneyFailedException $failure) {
             // A failure has already cost a red build; spending a few seconds to
             // minimise it to the executions that matter is the right default.
+            if ($this->absorbsKnownIssue($runner, $failure, fn (): JourneyFailedException => $this->shrink($runner, $failure))) {
+                return;
+            }
+
             throw $this->shrink($runner, $failure);
         }
 
@@ -1011,6 +1208,10 @@ final class PendingJourney
                 $this->resetAround(function () use ($runner, $journey, $order, $seed, &$trail): void {
                     $trail = $runner->runOrder($journey, $order, $seed, $this->http);
                 });
+            } catch (JourneyFailedException $failure) {
+                if (! $this->absorbsKnownIssue($runner, $failure, fn (): JourneyFailedException => $failure)) {
+                    throw $failure;
+                }
             } catch (OrderNotViableException) {
                 // Not every permutation satisfies the constraints; skip it.
             }
@@ -1074,6 +1275,12 @@ final class PendingJourney
             $this->resetAround(function () use ($runner, $tokens, &$trail): void {
                 $trail = $runner->runTokens($this->journeys, $this->deriveSeed(0), $tokens, $this->http);
             });
+        } catch (JourneyFailedException $failure) {
+            if ($this->absorbsKnownIssue($runner, $failure, fn (): JourneyFailedException => $failure)) {
+                return;
+            }
+
+            throw $failure;
         } catch (OrderNotViableException $notViable) {
             throw new InvalidJourneyException(sprintf(
                 'alsoTrails() ordering %d is not viable: %s Check the step\'s name, and that its after()/when() constraints allow it at that point.',

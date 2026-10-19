@@ -25,11 +25,12 @@ final class Invariants
      *
      * @param  class-string<TModel>  $model
      * @param  Closure(TModel): mixed  $expected  Recompute the value from source data.
+     * @param  string|null  $name  Replaces the generated name: a short, stable one to refer to it by, as in knownIssue().
      */
-    public static function cachedColumnMatches(string $model, string $column, Closure $expected): Invariant
+    public static function cachedColumnMatches(string $model, string $column, Closure $expected, ?string $name = null): Invariant
     {
         return Invariant::make(
-            sprintf('%s.%s matches its source data', class_basename($model), $column),
+            $name ?? sprintf('%s.%s matches its source data', class_basename($model), $column),
             function () use ($model, $column, $expected): void {
                 foreach (self::typed($model, (new $model)->newQuery()->get()) as $row) {
                     $cached = $row->getAttribute($column);
@@ -66,11 +67,12 @@ final class Invariants
      * @param  class-string<TModel>  $model
      * @param  int|Closure(TModel): int  $starting  The allowance before any spend: a constant, or computed per row.
      * @param  Closure(TModel): int  $spent  Count what has actually been consumed.
+     * @param  string|null  $name  Replaces the generated name: a short, stable one to refer to it by, as in knownIssue().
      */
-    public static function quotaBalances(string $model, string $column, int|Closure $starting, Closure $spent): Invariant
+    public static function quotaBalances(string $model, string $column, int|Closure $starting, Closure $spent, ?string $name = null): Invariant
     {
         return Invariant::make(
-            sprintf('%s.%s balances against its quota', class_basename($model), $column),
+            $name ?? sprintf('%s.%s balances against its quota', class_basename($model), $column),
             function () use ($model, $column, $starting, $spent): void {
                 foreach (self::typed($model, (new $model)->newQuery()->get()) as $row) {
                     $remaining = $row->getAttribute($column);
@@ -110,14 +112,15 @@ final class Invariants
      * @param  array<string, list<string>>  $transitions  Allowed edges: from-state => list of to-states.
      * @param  list<string>|null  $initial  States a row may first be observed in (null: any).
      * @param  (Closure(TModel): (string|\BackedEnum))|null  $stateOf  Maps a row to its state; defaults to reading $column.
+     * @param  string|null  $name  Replaces the generated name: a short, stable one to refer to it by, as in knownIssue().
      */
-    public static function legalTransitions(string $model, string $column, array $transitions, ?array $initial = null, ?Closure $stateOf = null): Invariant
+    public static function legalTransitions(string $model, string $column, array $transitions, ?array $initial = null, ?Closure $stateOf = null, ?string $name = null): Invariant
     {
         /** @var array<string, string> $seen */
         $seen = [];
 
         return Invariant::make(
-            sprintf('%s.%s only makes legal transitions', class_basename($model), $column),
+            $name ?? sprintf('%s.%s only makes legal transitions', class_basename($model), $column),
             function () use ($model, $column, $transitions, $initial, $stateOf, &$seen): void {
                 foreach (self::typed($model, (new $model)->newQuery()->get()) as $row) {
                     $key = self::key($row);
@@ -170,11 +173,12 @@ final class Invariants
      *
      * @param  class-string<TModel>  $model  A model using soft deletes.
      * @param  Closure(TModel): int  $liveChildren  Count the children still active for a trashed row.
+     * @param  string|null  $name  Replaces the generated name: a short, stable one to refer to it by, as in knownIssue().
      */
-    public static function trashedLeavesNoLiveChildren(string $model, Closure $liveChildren, string $childrenDescription = 'children', string $deletedAtColumn = 'deleted_at'): Invariant
+    public static function trashedLeavesNoLiveChildren(string $model, Closure $liveChildren, string $childrenDescription = 'children', string $deletedAtColumn = 'deleted_at', ?string $name = null): Invariant
     {
         return Invariant::make(
-            sprintf('trashed %s rows keep no live %s', class_basename($model), $childrenDescription),
+            $name ?? sprintf('trashed %s rows keep no live %s', class_basename($model), $childrenDescription),
             function () use ($model, $liveChildren, $childrenDescription, $deletedAtColumn): void {
                 $trashed = self::typed($model, (new $model)->newQuery()
                     ->withoutGlobalScopes()
@@ -210,11 +214,12 @@ final class Invariants
      *
      * @param  class-string<TModel>  $model
      * @param  non-empty-list<string>  $columns
+     * @param  string|null  $name  Replaces the generated name: a short, stable one to refer to it by, as in knownIssue().
      */
-    public static function uniqueBy(string $model, array $columns): Invariant
+    public static function uniqueBy(string $model, array $columns, ?string $name = null): Invariant
     {
         return Invariant::make(
-            sprintf('%s rows are unique by (%s)', class_basename($model), implode(', ', $columns)),
+            $name ?? sprintf('%s rows are unique by (%s)', class_basename($model), implode(', ', $columns)),
             function () use ($model, $columns): void {
                 /** @var array<string, string> $seen */
                 $seen = [];

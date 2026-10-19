@@ -8,6 +8,7 @@ use Random\Engine\Mt19937;
 use Random\Randomizer;
 use RuntimeException;
 use Vusys\Runabout\Context;
+use Vusys\Runabout\Invariant;
 use Vusys\Runabout\Invariants;
 use Vusys\Runabout\Tests\Fixtures\Models\Community;
 use Vusys\Runabout\Tests\Fixtures\Models\EnumPost;
@@ -17,6 +18,20 @@ use Vusys\Runabout\Tests\TestCase;
 /** The invariant library's own guard rails, beyond the planted-bug journeys. */
 final class InvariantsTest extends TestCase
 {
+    public function test_every_factory_takes_a_name_in_place_of_the_generated_one(): void
+    {
+        $this->assertSame(
+            ['cached', 'quota', 'transitions', 'children', 'unique'],
+            array_map(fn (Invariant $invariant): string => $invariant->name(), [
+                Invariants::cachedColumnMatches(Post::class, 'reports_remaining', fn (): int => 0, name: 'cached'),
+                Invariants::quotaBalances(Post::class, 'reports_remaining', 2, fn (): int => 0, name: 'quota'),
+                Invariants::legalTransitions(Post::class, 'status', ['draft' => ['published']], name: 'transitions'),
+                Invariants::trashedLeavesNoLiveChildren(Post::class, fn (): int => 0, name: 'children'),
+                Invariants::uniqueBy(Post::class, ['title'], name: 'unique'),
+            ]),
+        );
+    }
+
     public function test_legal_transitions_accepts_a_row_born_in_a_legal_initial_state(): void
     {
         $this->draftPost();

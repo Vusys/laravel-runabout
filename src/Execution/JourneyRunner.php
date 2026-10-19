@@ -42,6 +42,9 @@ final class JourneyRunner
      */
     private array $openTransactions = [];
 
+    /** @var array<string, string> Invariant names (unlabelled) not checked any more, as a set: known issues already hit this run. */
+    private array $suppressedInvariants = [];
+
     /**
      * @param  (Closure(): void)|null  $countAssertions  Told about each passing invariant check, so the test case's assertion count reflects them.
      * @param  list<string|null>  $resetConnections  Connections whose trail transaction the reset relies on (null for the default); a step that ends one fails.
@@ -423,6 +426,10 @@ final class JourneyRunner
 
                 $this->wrapped($owner, function () use ($owner, $instance, $step): void {
                     foreach ($owner->invariants as $invariant) {
+                        if (isset($this->suppressedInvariants[$invariant->name()])) {
+                            continue;
+                        }
+
                         try {
                             $owner->context->checkingInvariants(fn () => $invariant->check($owner->context));
                             $this->countPassedCheck();
@@ -474,6 +481,10 @@ final class JourneyRunner
 
             $this->wrapped($owner, function () use ($owner, $baseline): void {
                 foreach ($baseline as $invariant) {
+                    if (isset($this->suppressedInvariants[$invariant->name()])) {
+                        continue;
+                    }
+
                     try {
                         $owner->context->checkingInvariants(fn () => $invariant->check($owner->context));
                         $this->countPassedCheck();
@@ -520,6 +531,12 @@ final class JourneyRunner
                 ));
             }
         }
+    }
+
+    /** @internal Stop checking an invariant, by its unlabelled name, for the rest of this runner's run. */
+    public function suppressInvariant(string $name): void
+    {
+        $this->suppressedInvariants[$name] = $name;
     }
 
     private function countPassedCheck(): void

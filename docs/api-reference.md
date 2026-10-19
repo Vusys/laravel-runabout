@@ -72,6 +72,10 @@ public function failOnServerErrors(array $allowing = []): self     // fail the s
 public function requireEffect(?string $step = null, float $atLeast = 0.0): self   // fail the run unless steps took effect
 public function exhaustive(int $limit = 720): self
 
+// Known issues
+public function knownIssue(string|Invariant|null $invariant = null, ?string $step = null, ?string $throwing = null, string $reason = ''): self   // tolerate a filed bug; repeatable
+public function strictKnownIssues(): self                          // fail, not warn, when a known issue never fires
+
 // Replay
 public function seed(int $seed): self
 public function trail(array|string $artifact): self                // array, JSON, or "@path.json"
@@ -88,7 +92,7 @@ public function resetExternal(Closure $cleanup): self              // repeatable
 public function run(): void
 ```
 
-`onTrail()` and `resetExternal()` accumulate; the mode setters and `resetWith()` overwrite. `resetConnections()` and `resetExternal()` compose in either order — using `resetExternal()` alone still transacts the default connection. Passing no arguments to `resetConnections()` transacts just the default connection.
+`onTrail()`, `resetExternal()` and `knownIssue()` accumulate; the mode setters and `resetWith()` overwrite. `resetConnections()` and `resetExternal()` compose in either order — using `resetExternal()` alone still transacts the default connection. Passing no arguments to `resetConnections()` transacts just the default connection.
 
 Modes are not additive: exactly one runs, in the precedence order given under [Environment variables](environment.md#precedence).
 
@@ -153,6 +157,7 @@ public static function cachedColumnMatches(
     string $model,
     string $column,
     Closure $expected,                    // fn (TModel): mixed
+    ?string $name = null,                 // replaces the generated name
 ): Invariant
 
 public static function quotaBalances(
@@ -160,6 +165,7 @@ public static function quotaBalances(
     string $column,
     int|Closure $starting,                // constant, or fn (TModel): int
     Closure $spent,                       // fn (TModel): int
+    ?string $name = null,                 // replaces the generated name
 ): Invariant
 
 public static function legalTransitions(
@@ -168,6 +174,7 @@ public static function legalTransitions(
     array $transitions,                   // array<string, list<string>>
     ?array $initial = null,               // list<string>|null
     ?Closure $stateOf = null,             // fn (TModel): string|BackedEnum
+    ?string $name = null,                 // replaces the generated name
 ): Invariant
 
 public static function trashedLeavesNoLiveChildren(
@@ -175,11 +182,13 @@ public static function trashedLeavesNoLiveChildren(
     Closure $liveChildren,                // fn (TModel): int
     string $childrenDescription = 'children',
     string $deletedAtColumn = 'deleted_at',
+    ?string $name = null,                 // replaces the generated name
 ): Invariant
 
 public static function uniqueBy(
     string $model,
     array $columns,                       // non-empty-list<string>
+    ?string $name = null,                 // replaces the generated name
 ): Invariant
 ```
 

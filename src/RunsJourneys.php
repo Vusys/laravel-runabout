@@ -25,7 +25,10 @@ trait RunsJourneys
             ->watchingTransactionsOn([null])
             ->withStateResets($this->journeyStateResets())
             ->withResponsePolicy($this->journeyResponsePolicy(...))
-            ->withRejectionRule($this->journeyIsRejected(...));
+            ->withRejectionRule($this->journeyIsRejected(...))
+            ->skippingWith(function (string $message): never {
+                $this->markTestSkipped($message);
+            });
     }
 
     /**
@@ -46,7 +49,10 @@ trait RunsJourneys
             ->watchingTransactionsOn([null])
             ->withStateResets($this->journeyStateResets())
             ->withResponsePolicy($this->journeyResponsePolicy(...))
-            ->withRejectionRule($this->journeyIsRejected(...));
+            ->withRejectionRule($this->journeyIsRejected(...))
+            ->skippingWith(function (string $message): never {
+                $this->markTestSkipped($message);
+            });
     }
 
     /**
