@@ -29,6 +29,15 @@ final class TrailCoverage
     /** @var array<string, int> step => total executions across all trails */
     private array $runs = [];
 
+    /** @var array<string, int> step => executions that had an effect */
+    private array $effective = [];
+
+    /** @var array<string, array<string, string>> step => reasons given to noop(), as a set */
+    private array $noopReasons = [];
+
+    /** Whether any recorded execution had no effect, so the report shows effect counts. */
+    private bool $sawIneffective = false;
+
     /** @var array<string, int> step => trails the step appeared in */
     private array $appearances = [];
 
@@ -91,8 +100,15 @@ final class TrailCoverage
         /** @var array<string, true> $pairs */
         $pairs = [];
 
-        foreach ($steps as $step) {
+        foreach ($steps as $index => $step) {
             $this->runs[$step] = ($this->runs[$step] ?? 0) + 1;
+            $this->effective[$step] = ($this->effective[$step] ?? 0) + ($trail->tookEffect($index) ? 1 : 0);
+            $this->sawIneffective = $this->sawIneffective || ! $trail->tookEffect($index);
+            $reason = $trail->ineffectiveReason($index);
+
+            if ($reason !== null && $reason !== '') {
+                $this->noopReasons[$step][$reason] = $reason;
+            }
 
             foreach (array_keys($seen) as $before) {
                 if ($before !== $step) {
@@ -126,6 +142,12 @@ final class TrailCoverage
     public function stepRuns(): array
     {
         return $this->runs;
+    }
+
+    /** @return array<string, int> step => executions that had an effect (not noop(), and not every actor request rejected) */
+    public function effectiveRuns(): array
+    {
+        return $this->effective;
     }
 
     /** In how many trails some run of $before preceded some run of $after. */
@@ -188,11 +210,13 @@ final class TrailCoverage
 
             foreach ($this->runs as $step => $count) {
                 $lines[] = sprintf(
-                    '  %s  %d runs in %d/%d trails',
+                    '  %s  %d runs in %d/%d trails%s%s',
                     str_pad($step, $width),
                     $count,
                     $this->appearances[$step] ?? 0,
                     $this->trails,
+                    $this->sawIneffective ? sprintf(', %d effective', $this->effective[$step]) : '',
+                    isset($this->noopReasons[$step]) ? sprintf(' (no effect: %s)', implode('; ', $this->noopReasons[$step])) : '',
                 );
             }
         }

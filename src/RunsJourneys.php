@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\Response;
 use Vusys\Runabout\Support\RollBack;
 
 /** Mix into a Laravel/Testbench TestCase to run journeys inside tests. */
@@ -21,7 +22,8 @@ trait RunsJourneys
         $journey = is_string($journey) ? new $journey : $journey;
 
         return (new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
-            ->watchingTransactionsOn([null]);
+            ->watchingTransactionsOn([null])
+            ->withRejectionRule($this->journeyIsRejected(...));
     }
 
     /**
@@ -39,7 +41,22 @@ trait RunsJourneys
         ));
 
         return (new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
-            ->watchingTransactionsOn([null]);
+            ->watchingTransactionsOn([null])
+            ->withRejectionRule($this->journeyIsRejected(...));
+    }
+
+    /**
+     * Whether the app rejected the request this response answers (a
+     * validation error, a refusal). A step whose actor requests were all
+     * rejected had no effect, which the coverage report and requireEffect()
+     * count. The default rejects nothing; a typical rule is
+     * `$response->isClientError()`, or an API's `status: error` body.
+     *
+     * @param  TestResponse<Response>  $response
+     */
+    protected function journeyIsRejected(TestResponse $response): bool
+    {
+        return false;
     }
 
     /**

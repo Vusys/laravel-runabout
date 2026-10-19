@@ -23,6 +23,9 @@ final class Trail
     /** @var array<int, bool> Whether each token's draws were value-forced (pinned), keyed by token index. */
     private array $pinned = [];
 
+    /** @var array<int, string> Token index => reason ('' if none given), for executions that had no effect. */
+    private array $ineffective = [];
+
     /** A summary of the response the failing step last received, null when it made no request. */
     private ?string $failedStepResponse = null;
 
@@ -31,6 +34,24 @@ final class Trail
         private readonly int $seed,
         private readonly string $mode,
     ) {}
+
+    /** @internal Mark the latest execution as having had no effect (noop(), or every request rejected). */
+    public function markIneffective(string $reason = ''): void
+    {
+        $this->ineffective[count($this->tokens) - 1] = $reason;
+    }
+
+    /** Why the execution at $index had no effect, as given to noop(); null when it had an effect. */
+    public function ineffectiveReason(int $index): ?string
+    {
+        return $this->ineffective[$index] ?? null;
+    }
+
+    /** Whether the execution at $index (0-based, as in steps()) had an effect. */
+    public function tookEffect(int $index): bool
+    {
+        return ! isset($this->ineffective[$index]);
+    }
 
     /** @internal Note the response the failing step last received, for the failure message. */
     public function noteFailedStepResponse(string $summary): void
