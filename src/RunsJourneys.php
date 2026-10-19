@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use InvalidArgumentException;
+use Vusys\Runabout\Support\RollBack;
 
 /** Mix into a Laravel/Testbench TestCase to run journeys inside tests. */
 trait RunsJourneys
@@ -19,7 +20,8 @@ trait RunsJourneys
     {
         $journey = is_string($journey) ? new $journey : $journey;
 
-        return new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter());
+        return (new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
+            ->watchingTransactionsOn([null]);
     }
 
     /**
@@ -36,7 +38,8 @@ trait RunsJourneys
             $journeys,
         ));
 
-        return new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter());
+        return (new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
+            ->watchingTransactionsOn([null]);
     }
 
     /**
@@ -128,10 +131,6 @@ trait RunsJourneys
         $connection = DB::connection();
         $connection->beginTransaction();
 
-        try {
-            $trail();
-        } finally {
-            $connection->rollBack();
-        }
+        RollBack::after($trail, [$connection]);
     }
 }

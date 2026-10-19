@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vusys\Runabout\Execution;
 
 use Closure;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Random\Randomizer;
 use Throwable;
@@ -24,7 +25,7 @@ use Vusys\Runabout\Support\ResponseSummary;
 use Vusys\Runabout\Trail;
 
 /** @internal */
-final readonly class JourneyRunner
+final class JourneyRunner
 {
     /**
      * Safety valve against a picker that keeps choosing repeatable steps and
@@ -34,9 +35,21 @@ final readonly class JourneyRunner
     private const int TICK_MULTIPLIER = 25;
 
     /**
-     * @param  (Closure(): void)|null  $countAssertions  Told about each passing invariant check, so the test case's assertion count reflects them.
+     * The watched connections that were in a transaction when the current
+     * trail started, with the transaction depth Laravel had counted.
+     *
+     * @var list<array{string|null, int}>
      */
-    public function __construct(private ?Closure $countAssertions = null) {}
+    private array $openTransactions = [];
+
+    /**
+     * @param  (Closure(): void)|null  $countAssertions  Told about each passing invariant check, so the test case's assertion count reflects them.
+     * @param  list<string|null>  $resetConnections  Connections whose trail transaction the reset relies on (null for the default); a step that ends one fails.
+     */
+    public function __construct(
+        private readonly ?Closure $countAssertions = null,
+        private readonly array $resetConnections = [],
+    ) {}
 
     /**
      * @param  int  $repeatBias  Multiplies every repeatable step's pick weight;
@@ -221,6 +234,7 @@ final readonly class JourneyRunner
         $failure = null;
 
         try {
+            $this->recordOpenTransactions();
             $this->checkBaseline($instances, $seed);
             $body($trail);
         } catch (OrderNotViableException $notViable) {
@@ -418,6 +432,8 @@ final readonly class JourneyRunner
                     }
                 });
             }
+
+            $this->guardOpenTransactions($step);
         } finally {
             // Record what was drawn (even if the step or an invariant threw) so
             // the value shrinker has this execution's baseline; a forced source
@@ -466,6 +482,39 @@ final readonly class JourneyRunner
                     }
                 }
             });
+        }
+    }
+
+    private function recordOpenTransactions(): void
+    {
+        $this->openTransactions = [];
+
+        foreach ($this->resetConnections as $name) {
+            $connection = DB::connection($name);
+
+            if ($connection->getPdo()->inTransaction()) {
+                $this->openTransactions[] = [$name, $connection->transactionLevel()];
+            }
+        }
+    }
+
+    /**
+     * Fail the step that ended the trail's transaction, rather than the reset
+     * after it with a bare driver error. On MySQL and MariaDB a schema change
+     * commits implicitly, so the trail's rows can no longer be rolled back.
+     */
+    private function guardOpenTransactions(Step $step): void
+    {
+        foreach ($this->openTransactions as [$name, $level]) {
+            $connection = DB::connection($name);
+
+            if ($connection->transactionLevel() < $level || ! $connection->getPdo()->inTransaction()) {
+                throw new InvalidJourneyException(sprintf(
+                    'Step "%s" ended the trail\'s database transaction on connection "%s" (an implicit commit, usually a schema change such as Schema::table() on MySQL or MariaDB). The rows this trail wrote can no longer be rolled back, so later trails would see them. Use resetByTruncating(...) for journeys that run schema changes, or move the change out of the step.',
+                    $step->name(),
+                    $connection->getName(),
+                ));
+            }
         }
     }
 

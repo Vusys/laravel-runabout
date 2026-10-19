@@ -38,6 +38,18 @@ $this->journey(PostLifecycleJourney::class)
 
 To change the default for **every** journey a test case runs, override `wrapTrail()` on the test case rather than repeating `resetWith()` on each run.
 
+## Schema changes inside a trail
+
+On MySQL and MariaDB a schema change commits implicitly. A step that runs one (a model hook that adds a column, a `Schema::table()` call) ends the trail's transaction, so the rows the trail wrote can no longer be rolled back, and later trails would see them. SQLite's schema changes are transactional, so the same journey can pass there and fail on MySQL.
+
+With the default reset, `resetConnections()` or `resetExternal()`, Runabout checks after every step that the trail's transaction is still open, and fails the step that ended it:
+
+```
+Step "add custom field" ended the trail's database transaction on connection "mysql" (an implicit commit, usually a schema change such as Schema::table() on MySQL or MariaDB). …
+```
+
+That failure isn't shrunk: replays would run against the broken transaction. Use `resetByTruncating(...)` for journeys that run schema changes, or move the change out of the step and into the test's setup. A reset you supply with `resetWith()` isn't checked.
+
 ## Seed inside a step, not `setUp()`
 
 Whatever the reset, a store the trail seeds must be seeded *inside a step*, not once in `setUp()`: the reset runs after every trail, so state established before the run is gone after the first one. The usual shape is a first step that creates the state (and re-creates it when absent), as the `create community` step does in the [quick start](quick-start.md).
