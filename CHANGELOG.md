@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-19
+
+Failures that explain themselves, journeys that show they did something, and actors for token-based APIs. A failed step ends with the last response it received, a schema change that ends the trail's transaction fails at the step that made it, and `isolateRequests()` starts every actor request from fresh request state. `noop()` and `requireEffect()` show that steps took effect. Actors can authenticate through `journeyAuthenticate()`, on several guards at once, or with a real access token, and `racing()` tests check-then-act race guards. Every 1.3 seed and `RUNABOUT_TRAIL` artifact replays unchanged.
+
 ### Added
 
 - A failed step that made an actor request now ends its failure message with the last response it received: the request's method and URI, the status, a redirect's target, and the validation errors flashed to the session or the start of the body. Most failed step assertions in an HTTP journey mean the app rejected the request for an unexpected reason, and finding out which used to mean adding debug output to the step and replaying. Invariant failures, and steps that made no request, are unchanged. ([#70](https://github.com/Vusys/laravel-runabout/issues/70))
