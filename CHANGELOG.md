@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- Each passing invariant check now counts as one PHPUnit assertion. Built-in invariants signal a violation by throwing, so a journey checked only by invariants performed "no assertions", and PHPUnit reported it as risky even after thousands of checks. `RunsJourneys::journeyAssertionCounter()` supplies the counter; override it to return `null` to keep the old count. Trails and seeds are unchanged. ([#71](https://github.com/Vusys/laravel-runabout/issues/71))
+
 ### Fixed
 
 - A request an invariant makes through an actor no longer replaces `lastResponse()`. An invariant that asks "what does this actor see?" made the next step's `lastResponse()` return the invariant's response, so a step that asserted on the previous step's response without making a request of its own checked the wrong one. Requests made while invariants are checked, including `fromStart()` baseline checks, are still returned to the invariant, and are no longer recorded. ([#78](https://github.com/Vusys/laravel-runabout/issues/78))

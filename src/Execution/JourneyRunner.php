@@ -22,7 +22,7 @@ use Vusys\Runabout\Step;
 use Vusys\Runabout\Trail;
 
 /** @internal */
-final class JourneyRunner
+final readonly class JourneyRunner
 {
     /**
      * Safety valve against a picker that keeps choosing repeatable steps and
@@ -30,6 +30,11 @@ final class JourneyRunner
      * of the step count (with a generous floor for tiny journeys).
      */
     private const int TICK_MULTIPLIER = 25;
+
+    /**
+     * @param  (Closure(): void)|null  $countAssertions  Told about each passing invariant check, so the test case's assertion count reflects them.
+     */
+    public function __construct(private ?Closure $countAssertions = null) {}
 
     /**
      * @param  int  $repeatBias  Multiplies every repeatable step's pick weight;
@@ -388,6 +393,7 @@ final class JourneyRunner
                     foreach ($owner->invariants as $invariant) {
                         try {
                             $owner->context->checkingInvariants(fn () => $invariant->check($owner->context));
+                            $this->countPassedCheck();
                         } catch (Throwable $caught) {
                             throw InvariantViolationException::make(
                                 $owner->labelled($invariant->name()),
@@ -436,6 +442,7 @@ final class JourneyRunner
                 foreach ($baseline as $invariant) {
                     try {
                         $owner->context->checkingInvariants(fn () => $invariant->check($owner->context));
+                        $this->countPassedCheck();
                     } catch (Throwable $caught) {
                         throw InvariantViolationException::make(
                             $owner->labelled($invariant->name()),
@@ -445,6 +452,13 @@ final class JourneyRunner
                     }
                 }
             });
+        }
+    }
+
+    private function countPassedCheck(): void
+    {
+        if ($this->countAssertions instanceof Closure) {
+            ($this->countAssertions)();
         }
     }
 

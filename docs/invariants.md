@@ -57,6 +57,10 @@ A soft-deleted parent must keep no live children. `$liveChildren` returns the co
 
 No two rows of `$model` may share the given column tuple — what a unique constraint, or a `firstOrCreate`/dedup path, is meant to guarantee but scattered code can violate under the right ordering.
 
+## Invariant checks count as assertions
+
+Each passing invariant check adds one to the test's PHPUnit assertion count, so a journey checked only by invariants isn't reported as risky for performing no assertions. Checks made while shrinking a failure count too.
+
 ## Stateful invariants live for one trail
 
 Invariants are collected once per trail, so a stateful invariant like `legalTransitions` lives exactly as long as the trail it watches — it starts fresh each trail and accumulates observations only within it.
