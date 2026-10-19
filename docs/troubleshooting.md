@@ -161,6 +161,10 @@ The mirror image — trail 2 failing because trail 1's rows are *still there* �
 
 If trail 2 fails on state that isn't in the database at all (a cached value, a rate limiter answering 429, a Context flag, a user who still has permissions another actor revoked), the failure message usually says which: see [When the failure depends on earlier trails](reproducing-failures.md#when-the-failure-depends-on-earlier-trails). `RUNABOUT_LEAK_CHECK=1` warns about cache and Context leaks even when nothing fails.
 
+## A value set by one request is still visible to later ones
+
+Laravel `Context` and scoped bindings outlive the request that set them in a test process, unlike production. Call [`isolateRequests()`](actors-http.md#isolating-each-request) to clear them before every actor request.
+
 ## My shrunk trail passes when I replay it
 
 The failure depended on state an earlier trail left behind, so it only reproduced in the process that ran those trails. Check the end of the failure message for a "passed when replayed after …" note, which names the state, and see [When the failure depends on earlier trails](reproducing-failures.md#when-the-failure-depends-on-earlier-trails).
