@@ -14,6 +14,7 @@ protected function interleave(string|Journey ...$journeys): PendingJourney
 protected function journeyHttpDriver(): HttpDriver
 protected function wrapTrail(Closure $trail): void
 protected function journeyAssertionCounter(): ?Closure            // counts passing invariant checks as assertions
+protected function journeyStateResets(): array                    // list<Closure(): void> run after every trail
 ```
 
 `journey()` accepts a class-string or an instance; `interleave()` takes instances when each needs its own constructor state. Override `wrapTrail()` to change the reset for every journey the test case runs, and `journeyHttpDriver()` to change how actors reach the app. Each passing invariant check adds one to the test's assertion count; override `journeyAssertionCounter()` to return `null` to turn that off.
@@ -63,6 +64,7 @@ public function repeatHeavy(int $bias = 5): self
 public function minLength(int $executions): self                   // default 0: stop once minimums are met
 public function freshActors(): self                                // reload each actor's user before every request
 public function isolateRequests(): self                            // clear Context and scoped instances before every request, and reload users
+public function isolateTrails(): self                              // reset array caches, Context, scoped instances and guards after every trail
 public function exhaustive(int $limit = 720): self
 
 // Replay

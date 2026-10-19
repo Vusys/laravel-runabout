@@ -38,6 +38,31 @@ $this->journey(PostLifecycleJourney::class)
 
 To change the default for **every** journey a test case runs, override `wrapTrail()` on the test case rather than repeating `resetWith()` on each run.
 
+## State a rollback doesn't reach
+
+A database rollback resets rows, not in-memory framework state, and a PHPUnit process keeps that state from one trail to the next: cached values and rate-limiter counters in an in-memory cache store, Laravel Context and scoped container instances, an auth guard's login. A trail can then fail, or pass, only because of what an earlier trail did. Rate limiters are the classic case: after a few trails every actor request is answered with a 429.
+
+Call `isolateTrails()` to reset that state after every trail, shrink and replay runs included:
+
+```php
+$this->journey(SomeJourney::class)->isolateTrails()->run();
+```
+
+- In-memory (`array`) cache stores are flushed, the default store and the rate limiter's. A real store (Redis, a file, a database) is never touched.
+- Laravel Context is flushed and scoped container instances are forgotten.
+- Every auth guard is logged out. Steps that rely on an `actingAs()` done in `setUp()` would run unauthenticated from the second trail, so authenticate through [actors](actors-http.md) instead, or leave this off.
+
+For state Runabout doesn't know about (a static memo cache, a singleton holding models, an external store), override `journeyStateResets()` on the test case. Each reset it returns runs after every trail, with or without `isolateTrails()`:
+
+```php
+protected function journeyStateResets(): array
+{
+    return [fn () => Settings::flushMemo()];
+}
+```
+
+A reset that throws doesn't hide the trail's own failure.
+
 ## Schema changes inside a trail
 
 On MySQL and MariaDB a schema change commits implicitly. A step that runs one (a model hook that adds a column, a `Schema::table()` call) ends the trail's transaction, so the rows the trail wrote can no longer be rolled back, and later trails would see them. SQLite's schema changes are transactional, so the same journey can pass there and fail on MySQL.

@@ -159,7 +159,7 @@ If trail 1 passes and trail 2 fails on missing data, the setup almost certainly 
 
 The mirror image — trail 2 failing because trail 1's rows are *still there* — means the code under test commits its own transactions, so the wrapping rollback can't undo them. Switch to `resetByTruncating()`.
 
-If trail 2 fails on state that isn't in the database at all (a cached value, a rate limiter answering 429, a Context flag, a user who still has permissions another actor revoked), the failure message usually says which: see [When the failure depends on earlier trails](reproducing-failures.md#when-the-failure-depends-on-earlier-trails). `RUNABOUT_LEAK_CHECK=1` warns about cache and Context leaks even when nothing fails.
+If trail 2 fails on state that isn't in the database at all (a cached value, a rate limiter answering 429, a Context flag, a user who still has permissions another actor revoked), [`isolateTrails()`](database-resets.md#state-a-rollback-doesnt-reach) resets most of it, and the failure message usually says which: see [When the failure depends on earlier trails](reproducing-failures.md#when-the-failure-depends-on-earlier-trails). `RUNABOUT_LEAK_CHECK=1` warns about cache and Context leaks even when nothing fails.
 
 ## A value set by one request is still visible to later ones
 

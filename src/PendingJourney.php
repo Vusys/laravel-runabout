@@ -9,6 +9,7 @@ use Generator;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Util\ExcludeList;
+use Throwable;
 use Vusys\Runabout\Exceptions\InvalidJourneyException;
 use Vusys\Runabout\Exceptions\JourneyFailedException;
 use Vusys\Runabout\Exceptions\OrderNotViableException;
@@ -39,6 +40,11 @@ final class PendingJourney
     private int $repeatBias = 1;
 
     private int $minLength = 0;
+
+    private bool $isolatedTrails = false;
+
+    /** @var list<Closure(): void> App-specific resets run after every trail (RunsJourneys::journeyStateResets()). */
+    private array $stateResets = [];
 
     /** @var array{'array cache entries': int, 'Context keys': int}|null Framework state at the start of the first trail, for RUNABOUT_LEAK_CHECK. */
     private ?array $firstFingerprint = null;
@@ -98,6 +104,34 @@ final class PendingJourney
     public function watchingTransactionsOn(array $connections): self
     {
         $this->resetConnections = $connections;
+
+        return $this;
+    }
+
+    /**
+     * Reset framework state a database rollback doesn't reach after every
+     * trail, so no trail depends on what an earlier one left behind: in-memory
+     * (array) cache stores, which hold cached values and rate-limiter
+     * counters; Laravel Context and scoped container instances; and every
+     * auth guard's login. Only array cache stores are flushed, never a real
+     * one. Shrink and replay runs are reset the same way.
+     */
+    public function isolateTrails(): self
+    {
+        $this->isolatedTrails = true;
+
+        return $this;
+    }
+
+    /**
+     * @internal Resets the test case asks for after every trail, from
+     * RunsJourneys::journeyStateResets().
+     *
+     * @param  list<Closure(): void>  $resets
+     */
+    public function withStateResets(array $resets): self
+    {
+        $this->stateResets = $resets;
 
         return $this;
     }
@@ -405,7 +439,7 @@ final class PendingJourney
         $trail = null;
 
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $shuffle, &$trail): void {
+            $this->resetAround(function () use ($runner, $seed, $shuffle, &$trail): void {
                 $trail = $runner->runInterleaved($this->journeys, $seed, $shuffle, $this->http, $this->repeatBias, $this->minLength);
             });
         } catch (JourneyFailedException $failure) {
@@ -491,6 +525,47 @@ final class PendingJourney
     }
 
     /**
+     * Run a trail inside the reset wrapper, then the framework and app resets
+     * that apply. A reset that fails never masks the trail's own failure.
+     *
+     * @param  Closure(): void  $trail
+     */
+    private function resetAround(Closure $trail): void
+    {
+        $resets = $this->stateResets;
+
+        if ($this->isolatedTrails) {
+            array_unshift($resets, FrameworkState::flushArrayCaches(...), FrameworkState::flushRequestState(...), FrameworkState::forgetGuards(...));
+        }
+
+        if ($resets === []) {
+            ($this->wrapper)($trail);
+
+            return;
+        }
+
+        $failure = null;
+
+        try {
+            ($this->wrapper)($trail);
+        } catch (Throwable $caught) {
+            $failure = $caught;
+        }
+
+        foreach ($resets as $reset) {
+            try {
+                $reset();
+            } catch (Throwable $caught) {
+                $failure ??= $caught;
+            }
+        }
+
+        if ($failure instanceof Throwable) {
+            throw $failure;
+        }
+    }
+
+    /**
      * Replays run in the same process as the trails before them, so state a
      * database rollback doesn't reach (cache, Context, guards, actor user
      * objects) can make a short trail fail only because of what ran earlier.
@@ -503,9 +578,9 @@ final class PendingJourney
     private function diagnoseLeak(JourneyRunner $runner, int $seed, array $tokens, array $forcedDraws): ?string
     {
         $probes = [
-            ['flushing the array cache store', 'Cached values or rate-limiter counters are leaking between trails; flush them after each trail with resetExternal(fn () => Cache::flush()).', FrameworkState::flushArrayCaches(...), false],
-            ['clearing Laravel Context and scoped instances', 'Request-scoped state is leaking between requests; clear it in aroundStep() before each step.', FrameworkState::flushRequestState(...), false],
-            ['logging out every auth guard', 'A login is leaking between trails; authenticate through actors rather than in setUp().', FrameworkState::forgetGuards(...), false],
+            ['flushing the array cache store', 'Cached values or rate-limiter counters are leaking between trails; call isolateTrails() to flush them after each trail.', FrameworkState::flushArrayCaches(...), false],
+            ['clearing Laravel Context and scoped instances', 'Request-scoped state is leaking between requests; call isolateRequests() to clear it before each request.', FrameworkState::flushRequestState(...), false],
+            ['logging out every auth guard', 'A login is leaking between trails; call isolateTrails() to log every guard out after each trail, and authenticate through actors.', FrameworkState::forgetGuards(...), false],
             ['reloading the actors\' users', 'An actor\'s user object carries state from earlier trails; call freshActors().', null, true],
         ];
 
@@ -537,7 +612,7 @@ final class PendingJourney
     private function reproducesWith(JourneyRunner $runner, int $seed, array $tokens, array $forcedDraws, ?HttpDriver $http): bool
     {
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $tokens, $forcedDraws, $http): void {
+            $this->resetAround(function () use ($runner, $seed, $tokens, $forcedDraws, $http): void {
                 $runner->runTokens($this->journeys, $seed, $tokens, $http, $forcedDraws);
             });
 
@@ -614,7 +689,7 @@ final class PendingJourney
     private function recordBaseline(JourneyRunner $runner, int $seed, array $tokens): ?Trail
     {
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $tokens): void {
+            $this->resetAround(function () use ($runner, $seed, $tokens): void {
                 $runner->runTokens($this->journeys, $seed, $tokens, $this->http);
             });
         } catch (JourneyFailedException $failure) {
@@ -659,7 +734,7 @@ final class PendingJourney
     private function candidateReproduces(JourneyRunner $runner, int $seed, array $candidate, FailureSignature $signature, array $forcedDraws = []): bool
     {
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $candidate, $forcedDraws): void {
+            $this->resetAround(function () use ($runner, $seed, $candidate, $forcedDraws): void {
                 $runner->runTokens($this->journeys, $seed, $candidate, $this->http, $forcedDraws);
             });
         } catch (JourneyFailedException $failure) {
@@ -682,7 +757,7 @@ final class PendingJourney
     private function replayFailure(JourneyRunner $runner, int $seed, array $tokens, array $forcedDraws = []): ?JourneyFailedException
     {
         try {
-            ($this->wrapper)(function () use ($runner, $seed, $tokens, $forcedDraws): void {
+            $this->resetAround(function () use ($runner, $seed, $tokens, $forcedDraws): void {
                 $runner->runTokens($this->journeys, $seed, $tokens, $this->http, $forcedDraws);
             });
         } catch (JourneyFailedException $failure) {
@@ -781,7 +856,7 @@ final class PendingJourney
             $trail = null;
 
             try {
-                ($this->wrapper)(function () use ($runner, $journey, $order, $seed, &$trail): void {
+                $this->resetAround(function () use ($runner, $journey, $order, $seed, &$trail): void {
                     $trail = $runner->runOrder($journey, $order, $seed, $this->http);
                 });
             } catch (OrderNotViableException) {
@@ -847,7 +922,7 @@ final class PendingJourney
         $trail = null;
 
         try {
-            ($this->wrapper)(function () use ($runner, $parsed, &$trail): void {
+            $this->resetAround(function () use ($runner, $parsed, &$trail): void {
                 $trail = $runner->runTokens($this->journeys, $parsed->seed, $parsed->tokens, $this->http, $parsed->forcedDraws);
             });
         } catch (OrderNotViableException $notViable) {

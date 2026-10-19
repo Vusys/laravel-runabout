@@ -76,7 +76,7 @@ final class LeakDiagnosisTest extends TestCase
 
         $this->assertStringContainsString('Invariant "bounded" violated after step', $message);
         $this->assertStringEndsWith(
-            "\nThe minimal trail passed when replayed after flushing the array cache store, so the failure depends on state that earlier trails or replays left behind, and the replay line above may not reproduce it on its own. Cached values or rate-limiter counters are leaking between trails; flush them after each trail with resetExternal(fn () => Cache::flush()).",
+            "\nThe minimal trail passed when replayed after flushing the array cache store, so the failure depends on state that earlier trails or replays left behind, and the replay line above may not reproduce it on its own. Cached values or rate-limiter counters are leaking between trails; call isolateTrails() to flush them after each trail.",
             $message,
         );
     }
@@ -89,7 +89,7 @@ final class LeakDiagnosisTest extends TestCase
         ))->shuffles(5));
 
         $this->assertStringContainsString('passed when replayed after clearing Laravel Context and scoped instances', $message);
-        $this->assertStringEndsWith('Request-scoped state is leaking between requests; clear it in aroundStep() before each step.', $message);
+        $this->assertStringEndsWith('Request-scoped state is leaking between requests; call isolateRequests() to clear it before each request.', $message);
     }
 
     public function test_a_failure_that_needs_a_leftover_login_is_diagnosed(): void
@@ -111,7 +111,7 @@ final class LeakDiagnosisTest extends TestCase
         $message = $this->failureOf($this->journey($journey)->shuffles(3));
 
         $this->assertStringContainsString('passed when replayed after logging out every auth guard', $message);
-        $this->assertStringEndsWith('A login is leaking between trails; authenticate through actors rather than in setUp().', $message);
+        $this->assertStringEndsWith('A login is leaking between trails; call isolateTrails() to log every guard out after each trail, and authenticate through actors.', $message);
     }
 
     public function test_a_failure_that_needs_a_stale_actor_user_is_diagnosed(): void

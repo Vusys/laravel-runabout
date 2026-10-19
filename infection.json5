@@ -42,6 +42,17 @@
         DecrementInteger: {
             ignore: ["Vusys\\Runabout\\Execution\\JourneyRunner::runCanonical"],
         },
+        // recordBaseline() and replayFailure() replay a token list that has
+        // just reproduced the failure, so their "no longer viable" catch is a
+        // defensive fallback no deterministic journey reaches. Removing it is
+        // unobservable without a journey whose eligibility changes between
+        // two identical replays.
+        CatchBlockRemoval: {
+            ignore: [
+                "Vusys\\Runabout\\PendingJourney::recordBaseline",
+                "Vusys\\Runabout\\PendingJourney::replayFailure",
+            ],
+        },
     },
     minMsi: 94,
     minCoveredMsi: 94,

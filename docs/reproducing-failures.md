@@ -87,7 +87,7 @@ Replays run in the same PHP process as the trails before them. A database rollba
 So when a trail other than the first fails, Runabout replays the minimal trail again after clearing each kind of state in turn. If it then passes, the failure ends with a note naming what had to be cleared and how to stop it leaking:
 
 ```
-The minimal trail passed when replayed after flushing the array cache store, so the failure depends on state that earlier trails or replays left behind, and the replay line above may not reproduce it on its own. Cached values or rate-limiter counters are leaking between trails; flush them after each trail with resetExternal(fn () => Cache::flush()).
+The minimal trail passed when replayed after flushing the array cache store, so the failure depends on state that earlier trails or replays left behind, and the replay line above may not reproduce it on its own. Cached values or rate-limiter counters are leaking between trails; call isolateTrails() to flush them after each trail.
 ```
 
 Only in-memory (array) cache stores are flushed for this, never a real one. To spot leaks before they cause a failure, set [`RUNABOUT_LEAK_CHECK=1`](environment.md).

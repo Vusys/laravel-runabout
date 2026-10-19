@@ -21,7 +21,8 @@ trait RunsJourneys
         $journey = is_string($journey) ? new $journey : $journey;
 
         return (new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
-            ->watchingTransactionsOn([null]);
+            ->watchingTransactionsOn([null])
+            ->withStateResets($this->journeyStateResets());
     }
 
     /**
@@ -39,7 +40,21 @@ trait RunsJourneys
         ));
 
         return (new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
-            ->watchingTransactionsOn([null]);
+            ->watchingTransactionsOn([null])
+            ->withStateResets($this->journeyStateResets());
+    }
+
+    /**
+     * Resets to run after every trail, for state a database rollback doesn't
+     * reach and Runabout doesn't know about: static memo caches, singletons
+     * holding models, an external store. Each runs after the reset wrapper,
+     * even when the trail failed.
+     *
+     * @return list<Closure(): void>
+     */
+    protected function journeyStateResets(): array
+    {
+        return [];
     }
 
     /**
