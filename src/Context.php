@@ -257,22 +257,46 @@ final class Context
      * of the default one, for apps with several (a storefront and an admin);
      * a list logs it in on each, for a user of both the UI and the API.
      *
+     * Headers given here are sent with every request the actor makes, and
+     * can be extended per request with Actor::withHeaders().
+     *
      * @param  array<string, mixed>  $session
      * @param  string|list<string>|null  $guard
+     * @param  array<string, string>  $headers
      */
-    public function actingAs(Authenticatable $user, string $name, array $session = [], string|array|null $guard = null): Actor
+    public function actingAs(Authenticatable $user, string $name, array $session = [], string|array|null $guard = null, array $headers = []): Actor
     {
         if ($guard === []) {
             throw new RuntimeException(sprintf('Actor "%s" has an empty list of guards. Name at least one, or pass null for the default guard.', $name));
         }
 
+        return $this->actors[$name] = new Actor($name, $user, $this->http(), $this, $session, $guard, $headers);
+    }
+
+    /**
+     * Register a named actor that authenticates only by sending a real access
+     * token (a Sanctum or Passport plain-text token) as a bearer token. Nobody
+     * is logged in for its requests, so a session login can't shadow the
+     * token, and token abilities, scopes and expiry apply as in production.
+     * $user is what Actor::user() returns.
+     *
+     * @param  array<string, mixed>  $session
+     * @param  array<string, string>  $headers
+     */
+    public function actingWithToken(Authenticatable $user, string $token, string $name, array $session = [], array $headers = []): Actor
+    {
+        return $this->actors[$name] = new Actor($name, $user, $this->http(), $this, $session, headers: $headers, token: $token);
+    }
+
+    private function http(): HttpDriver
+    {
         if (! $this->http instanceof HttpDriver) {
             throw new RuntimeException(
                 'No HTTP driver is bound to this context. Actors are available when the journey runs through RunsJourneys::journey() on a Laravel test case.',
             );
         }
 
-        return $this->actors[$name] = new Actor($name, $user, $this->http, $this, $session, $guard);
+        return $this->http;
     }
 
     /** Retrieve a previously registered actor: $ctx->as('manager')->postJson(...). */

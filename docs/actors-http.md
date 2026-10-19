@@ -24,7 +24,8 @@ Step::make('cast vote')
 
 ## Registering and switching actors
 
-- `$ctx->actingAs($user, 'name', $session = [], guard: null)` — register a named actor authenticated as `$user`, optionally with session state and on a [named guard](#apps-with-several-guards), or a list of them. Returns the `Actor`.
+- `$ctx->actingAs($user, 'name', $session = [], guard: null, headers: [])` — register a named actor authenticated as `$user`, optionally with session state, [default headers](#default-headers), and on a [named guard](#apps-with-several-guards) or a list of them. Returns the `Actor`.
+- `$ctx->actingWithToken($user, $plainTextToken, 'name')` — register an actor that authenticates only by sending a [real access token](#real-access-tokens).
 - `$ctx->as('name')` — get a previously registered actor.
 - `$ctx->lastResponse()` — the most recent `TestResponse` returned by any actor in a step. Requests an invariant makes are observations, so they don't replace it.
 
@@ -83,6 +84,18 @@ return ['admin' => [$this->adminUser, ['web', 'api']]];
 
 $ctx->actingAs($user, 'admin', guard: ['web', 'api']);  // the same, mid-trail
 ```
+
+### Real access tokens
+
+When a token guard checks the session guard first (Sanctum's default `guard => ['web']`), an actor logged in with `actingAs()` makes it ignore an explicit `Authorization: Bearer` header. To exercise a real token, with its abilities, per-token tenancy and expiry, register the actor with `actingWithToken()`. It sends the token as a bearer token with every request, and logs every guard out first, so no other actor's login shadows it:
+
+```php
+$token = $user->createToken('integration', ['orders:read'])->plainTextToken;
+
+$ctx->actingWithToken($user, $token, 'integration')->getJson('/api/orders')->assertOk();
+```
+
+`Actor::user()` still returns `$user`.
 
 ### Token guards
 
@@ -149,5 +162,15 @@ $ctx->as('agent')->withSession(['impersonating' => 42])->postJson(...);  // laye
 ```
 
 `withSession()` returns a copy of the actor with the extra session data merged, for one request, leaving the actor's baseline session intact.
+
+### Default headers
+
+Headers work the same way: those given to `actingAs()` (or `actingWithToken()`) go with every request the actor makes, `withHeaders()` layers more on for one request, and a request's own headers win over both:
+
+```php
+$ctx->actingAs($user, 'agent', headers: ['X-Tenant' => '7', 'Accept-Version' => '2']);
+$ctx->as('agent')->withHeaders(['X-Tenant' => '8'])->getJson('/api/orders');
+$ctx->as('agent')->getJson('/api/orders', ['X-Tenant' => '9']);
+```
 
 For state that lives *outside* the auth guard and session — and especially in [interleaved journeys](interleaving.md), where whose turn it is changes step to step — see the `aroundStep()` hook.

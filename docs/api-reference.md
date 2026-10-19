@@ -115,7 +115,8 @@ public function ranBefore(string $step): bool
 public function noop(string $reason = ''): void                    // this execution had no effect
 
 // Actors
-public function actingAs(Authenticatable $user, string $name, array $session = [], string|array|null $guard = null): Actor   // a guard, a list of guards, or null for the default
+public function actingAs(Authenticatable $user, string $name, array $session = [], string|array|null $guard = null, array $headers = []): Actor   // a guard, a list of guards, or null for the default
+public function actingWithToken(Authenticatable $user, string $token, string $name, array $session = [], array $headers = []): Actor   // authenticates by bearer token alone
 public function as(string $name): Actor
 public function lastResponse(): TestResponse
 
@@ -187,6 +188,7 @@ Returned by `$ctx->actingAs()` and `$ctx->as()`. See [Actors & HTTP](actors-http
 public function name(): string
 public function user(): Authenticatable
 public function withSession(array $session): self                  // a copy with extra session data
+public function withHeaders(array $headers): self                  // a copy that also sends these headers
 
 public function get(string $uri, array $headers = []): TestResponse
 public function post(string $uri, array $data = [], array $headers = []): TestResponse
@@ -201,7 +203,7 @@ public function patchJson(string $uri, array $data = [], array $headers = []): T
 public function deleteJson(string $uri, array $data = [], array $headers = []): TestResponse
 ```
 
-Every request authenticates as the actor's user, on its guard if it has one, and applies its session data first. The response is also recorded as the context's `lastResponse()`, unless the request was made while an invariant was being checked.
+Every request authenticates as the actor's user, on its guards if it has any, and applies its session data first. A token actor logs every guard out and sends its bearer token instead. The actor's headers go with each request, under the request's own. The response is also recorded as the context's `lastResponse()`, unless the request was made while an invariant was being checked.
 
 ## `Trail`
 

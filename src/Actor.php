@@ -18,6 +18,8 @@ final readonly class Actor
     /**
      * @param  array<string, mixed>  $session  Applied to every request this actor makes.
      * @param  string|non-empty-list<string>|null  $guard  The auth guard this actor logs in on, or several; null for the default guard.
+     * @param  array<string, string>  $headers  Sent with every request this actor makes; a request's own headers win.
+     * @param  string|null  $token  A plain-text access token sent as a bearer token, in place of logging the user in.
      */
     public function __construct(
         private string $name,
@@ -26,6 +28,8 @@ final readonly class Actor
         private Context $context,
         private array $session = [],
         private string|array|null $guard = null,
+        private array $headers = [],
+        private ?string $token = null,
     ) {}
 
     public function name(): string
@@ -47,7 +51,19 @@ final readonly class Actor
      */
     public function withSession(array $session): self
     {
-        return new self($this->name, $this->user, $this->http, $this->context, [...$this->session, ...$session], $this->guard);
+        return new self($this->name, $this->user, $this->http, $this->context, [...$this->session, ...$session], $this->guard, $this->headers, $this->token);
+    }
+
+    /**
+     * A copy of this actor that also sends these headers, on top of its own:
+     * $ctx->as('agent')->withHeaders(['X-Tenant' => '5'])->getJson(...).
+     * To send them on every request, pass headers to actingAs().
+     *
+     * @param  array<string, string>  $headers
+     */
+    public function withHeaders(array $headers): self
+    {
+        return new self($this->name, $this->user, $this->http, $this->context, $this->session, $this->guard, [...$this->headers, ...$headers], $this->token);
     }
 
     /**
@@ -148,6 +164,31 @@ final readonly class Actor
         return $this->form('DELETE', $uri, $data, $headers);
     }
 
+    /** Log in (or, for a token actor, make sure nobody is logged in) and apply the session for the next request. */
+    private function prepare(): void
+    {
+        if ($this->token === null) {
+            $this->http->authenticate($this->user, $this->guard);
+        } else {
+            $this->http->authenticateGuest();
+        }
+
+        $this->http->applySession($this->session);
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     * @return array<string, string>
+     */
+    private function headersWith(array $headers): array
+    {
+        return [
+            ...$this->token === null ? [] : ['Authorization' => 'Bearer '.$this->token],
+            ...$this->headers,
+            ...$headers,
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $data
      * @param  array<string, string>  $headers
@@ -155,10 +196,9 @@ final readonly class Actor
      */
     private function json(string $method, string $uri, array $data, array $headers): TestResponse
     {
-        $this->http->authenticate($this->user, $this->guard);
-        $this->http->applySession($this->session);
+        $this->prepare();
 
-        $response = $this->context->rememberResponse($this->http->json($method, $uri, $data, $headers));
+        $response = $this->context->rememberResponse($this->http->json($method, $uri, $data, $this->headersWith($headers)));
         $this->context->noteRequest($this->http->rejects($response));
 
         return $response;
@@ -171,10 +211,9 @@ final readonly class Actor
      */
     private function form(string $method, string $uri, array $data, array $headers): TestResponse
     {
-        $this->http->authenticate($this->user, $this->guard);
-        $this->http->applySession($this->session);
+        $this->prepare();
 
-        $response = $this->context->rememberResponse($this->http->form($method, $uri, $data, $headers));
+        $response = $this->context->rememberResponse($this->http->form($method, $uri, $data, $this->headersWith($headers)));
         $this->context->noteRequest($this->http->rejects($response));
 
         return $response;
