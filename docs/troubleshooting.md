@@ -181,6 +181,29 @@ The usual causes, and their fixes:
 - **Static memo caches and singletons** in app code: reset them with `resetExternal()` too.
 - **The actor's user instance**, which still carries the permissions or relations it had when the run started: [`freshActors()`](actors-http.md#reloading-users-before-each-request).
 
+## Memory grows across trails
+
+Runabout itself keeps nothing per trail: a run's memory after a hundred trails is what it was after ten, however long the trails. (The coverage summary keeps one entry per distinct ordering, a few hundred bytes each.) Growth that scales with the trails run comes from the app under test, or the test case, holding on to something every request adds.
+
+Measure it first, by sampling memory as each trail completes:
+
+```php
+$this->journey(CommentsJourney::class)
+    ->onTrail(function (Trail $trail): void {
+        gc_collect_cycles();
+        fwrite(STDERR, sprintf("%s steps, %.1f MB\n", count($trail->steps()), memory_get_usage() / 1e6));
+    })
+    ->run();
+```
+
+The first trail or two rise while autoloading, routes and the container warm up. If memory keeps climbing after that, the usual causes are:
+
+- **The query log**, if something calls `DB::enableQueryLog()`. It keeps every query until the test ends. Leave it off for journeys, or clear it with `DB::flushQueryLog()` in a [`resetExternal()`](database-resets.md#multiple-connections-and-external-stores) cleanup.
+- **Listeners, macros or bindings registered inside a step or a request**, such as `Event::listen()` in a controller or a service provider that registers per request. Each trail adds another. Register them once.
+- **Debugging and audit tools**: Telescope, Debugbar, Clockwork, or an activity log that buffers entries or models in memory. Turn them off in the testing environment.
+- **Static caches and singletons in app code** that collect per-request entries. Clear them in a [`resetExternal()`](database-resets.md#multiple-connections-and-external-stores) cleanup.
+- **Log handlers that buffer**, such as Monolog's `TestHandler` or `BufferHandler`.
+
 ## A step "ended the trail's database transaction"
 
 The step ran something that committed the trail's transaction, almost always a schema change on MySQL or MariaDB, which commits implicitly. See [Schema changes inside a trail](database-resets.md#schema-changes-inside-a-trail). If the reset itself reports `Rolling back the trail's transaction … failed`, the same thing happened somewhere Runabout doesn't check, such as inside a custom `wrapTrail()`.
