@@ -397,6 +397,10 @@ final class JourneyRunner
         try {
             try {
                 $this->wrapped($instance, fn () => $step->execute($instance->context));
+
+                if (! $instance->context->tookEffect()) {
+                    $trail->markIneffective($instance->context->noopReason());
+                }
             } catch (Throwable $caught) {
                 $response = $instance->context->stepResponse();
 

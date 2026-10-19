@@ -159,6 +159,7 @@ final readonly class Actor
         $this->http->applySession($this->session);
 
         $response = $this->context->rememberResponse($this->http->json($method, $uri, $data, $headers));
+        $this->context->noteRequest($this->http->rejects($response));
         $this->http->inspect($response);
 
         return $response;
@@ -175,6 +176,7 @@ final readonly class Actor
         $this->http->applySession($this->session);
 
         $response = $this->context->rememberResponse($this->http->form($method, $uri, $data, $headers));
+        $this->context->noteRequest($this->http->rejects($response));
         $this->http->inspect($response);
 
         return $response;

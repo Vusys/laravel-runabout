@@ -26,6 +26,7 @@ final readonly class HttpDriver
      * @param  bool  $freshUsers  Reload a saved Eloquent user before each request, as production resolves it from the session.
      * @param  bool  $isolatedRequests  Clear Laravel Context and scoped container instances before each request, as a production request starts without them.
      * @param  list<Closure(TestResponse<Response>): void>  $responsePolicies  Called with every response, in order; one that throws fails the request's step.
+     * @param  list<Closure(TestResponse<Response>): bool>  $rejectionRules  A response any of these returns true for was rejected by the app.
      */
     public function __construct(
         private Closure $authenticate,
@@ -35,6 +36,7 @@ final readonly class HttpDriver
         private bool $freshUsers = false,
         private bool $isolatedRequests = false,
         private array $responsePolicies = [],
+        private array $rejectionRules = [],
     ) {}
 
     /** A copy of this driver that reloads a saved Eloquent user before each request. */
@@ -66,8 +68,39 @@ final readonly class HttpDriver
         }
     }
 
-    /** @param  list<Closure(TestResponse<Response>): void>|null  $responsePolicies */
-    private function copy(?bool $freshUsers = null, ?bool $isolatedRequests = null, ?array $responsePolicies = null): self
+    /**
+     * A copy of this driver that also treats a response $rule returns true
+     * for as rejected by the app (a validation error, a refusal). A step
+     * whose actor requests were all rejected had no effect.
+     *
+     * @param  Closure(TestResponse<Response>): bool  $rule
+     */
+    public function withRejectionRule(Closure $rule): self
+    {
+        return $this->copy(rejectionRules: [...$this->rejectionRules, $rule]);
+    }
+
+    /**
+     * Whether any rejection rule says the app rejected this response.
+     *
+     * @param  TestResponse<Response>  $response
+     */
+    public function rejects(TestResponse $response): bool
+    {
+        foreach ($this->rejectionRules as $rule) {
+            if ($rule($response)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<Closure(TestResponse<Response>): void>|null  $responsePolicies
+     * @param  list<Closure(TestResponse<Response>): bool>|null  $rejectionRules
+     */
+    private function copy(?bool $freshUsers = null, ?bool $isolatedRequests = null, ?array $responsePolicies = null, ?array $rejectionRules = null): self
     {
         return new self(
             $this->authenticate,
@@ -77,6 +110,7 @@ final readonly class HttpDriver
             $freshUsers ?? $this->freshUsers,
             $isolatedRequests ?? $this->isolatedRequests,
             $responsePolicies ?? $this->responsePolicies,
+            $rejectionRules ?? $this->rejectionRules,
         );
     }
 

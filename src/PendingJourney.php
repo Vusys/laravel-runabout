@@ -46,6 +46,9 @@ final class PendingJourney
 
     private bool $isolatedTrails = false;
 
+    /** @var list<array{string|null, float}> requireEffect() calls: a step name (null for every step) and the share of runs that must take effect. */
+    private array $effectRequirements = [];
+
     /** @var list<Closure(): void> App-specific resets run after every trail (RunsJourneys::journeyStateResets()). */
     private array $stateResets = [];
 
@@ -128,6 +131,35 @@ final class PendingJourney
                 throw new RuntimeException(sprintf('An actor request was answered with a server error (%d).', $status));
             }
         });
+
+        return $this;
+    }
+
+    /**
+     * @internal Treat the responses the test case's rule picks out as
+     * rejected (RunsJourneys::journeyIsRejected()).
+     *
+     * @param  Closure(TestResponse<Response>): bool  $rule
+     */
+    public function withRejectionRule(Closure $rule): self
+    {
+        $this->http = $this->http?->withRejectionRule($rule);
+
+        return $this;
+    }
+
+    /**
+     * Fail the run unless steps took effect. With no step, every declared
+     * step must take effect at least once across the run (and atLeast, if
+     * given, is the share of its runs that must). With a step name, only
+     * that step, in every interleaved instance. An execution has no effect
+     * when its act called $ctx->noop(), or when the app rejected every actor
+     * request it made (see RunsJourneys::journeyIsRejected()). Checked once
+     * every trail has passed.
+     */
+    public function requireEffect(?string $step = null, float $atLeast = 0.0): self
+    {
+        $this->effectRequirements[] = [$step, $atLeast];
 
         return $this;
     }
@@ -404,10 +436,66 @@ final class PendingJourney
             $this->onTrail($coverage->record(...));
         }
 
+        $effects = $this->effectRequirements === [] ? null : new TrailCoverage($this->journeys);
+
+        if ($effects instanceof TrailCoverage) {
+            $this->onTrail($effects->record(...));
+        }
+
         $this->execute();
 
         if ($coverage instanceof TrailCoverage) {
             TrailReporter::printCoverage($this->names(), $coverage);
+        }
+
+        if ($effects instanceof TrailCoverage) {
+            $this->checkEffects($effects);
+        }
+    }
+
+    /** Fail the run when a requireEffect() requirement isn't met. */
+    private function checkEffects(TrailCoverage $effects): void
+    {
+        $runs = $effects->stepRuns();
+        $effective = $effects->effectiveRuns();
+        $declared = [];
+
+        foreach ($this->journeys as $index => $journey) {
+            $label = count($this->journeys) > 1 ? JourneyRunner::instanceLabel($index).': ' : '';
+
+            foreach ($journey->steps() as $step) {
+                $declared[$label.$step->name()] = $step->name();
+            }
+        }
+
+        $failures = [];
+
+        foreach ($this->effectRequirements as [$name, $atLeast]) {
+            if ($name !== null && ! in_array($name, $declared, true)) {
+                throw new InvalidJourneyException(sprintf('requireEffect() names step "%s", but no journey in this run declares it.', $name));
+            }
+
+            foreach ($declared as $labelled => $step) {
+                if ($name !== null && $name !== $step) {
+                    continue;
+                }
+
+                $ran = $runs[$labelled] ?? 0;
+                $took = $effective[$labelled] ?? 0;
+                $needed = max(1, (int) ceil($atLeast * $ran));
+
+                if ($took < $needed) {
+                    $failures[] = sprintf('"%s" took effect in %d of %d runs%s', $labelled, $took, $ran, $atLeast > 0 ? sprintf(' (at least %d required)', $needed) : '');
+                }
+            }
+        }
+
+        if ($failures !== []) {
+            throw new RuntimeException(sprintf(
+                "Journey %s passed, but not every step took effect: %s. A run where a step never does anything can't fail on what that step would have done. Check its preconditions and the requests it makes, or pick from options that are valid when it runs.",
+                $this->names(),
+                implode('; ', array_unique($failures)),
+            ));
         }
     }
 

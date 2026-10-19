@@ -24,7 +24,8 @@ trait RunsJourneys
         return (new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
             ->watchingTransactionsOn([null])
             ->withStateResets($this->journeyStateResets())
-            ->withResponsePolicy($this->journeyResponsePolicy(...));
+            ->withResponsePolicy($this->journeyResponsePolicy(...))
+            ->withRejectionRule($this->journeyIsRejected(...));
     }
 
     /**
@@ -44,7 +45,8 @@ trait RunsJourneys
         return (new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter()))
             ->watchingTransactionsOn([null])
             ->withStateResets($this->journeyStateResets())
-            ->withResponsePolicy($this->journeyResponsePolicy(...));
+            ->withResponsePolicy($this->journeyResponsePolicy(...))
+            ->withRejectionRule($this->journeyIsRejected(...));
     }
 
     /**
@@ -55,6 +57,20 @@ trait RunsJourneys
      * @param  TestResponse<Response>  $response
      */
     protected function journeyResponsePolicy(TestResponse $response): void {}
+
+    /**
+     * Whether the app rejected the request this response answers (a
+     * validation error, a refusal). A step whose actor requests were all
+     * rejected had no effect, which the coverage report and requireEffect()
+     * count. The default rejects nothing; a typical rule is
+     * `$response->isClientError()`, or an API's `status: error` body.
+     *
+     * @param  TestResponse<Response>  $response
+     */
+    protected function journeyIsRejected(TestResponse $response): bool
+    {
+        return false;
+    }
 
     /**
      * Resets to run after every trail, for state a database rollback doesn't

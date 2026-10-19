@@ -54,6 +54,34 @@ The 18 excluded pairs are the ones that `after()` makes impossible, such as "pub
 
 If the run did not observe some pairs, the summary lists them: `Orderings of step pairs never observed (3 of 54, 18 excluded by after()):`. Compare that list with your `when()` conditions. A `when()` condition can block orderings that no static check can see. An *unconstrained* pair on that list is the finding. The shuffles never tried that ordering. A bug hiding behind it is invisible at this shuffle count. Distinct orderings tell the same story from above — 51 trails producing 51 distinct orderings means the seeds aren't wasting trails re-walking the same path.
 
+## Did the steps do anything? `requireEffect()`
+
+A journey can pass without its interesting steps ever having an effect: every request a step makes fails validation, or its own guard finds nothing to do in every trail. Ordering coverage can't tell you, because the step did run.
+
+An execution had no effect when its act called [`$ctx->noop()`](steps.md#saying-a-step-had-no-effect-noop), or when the app rejected every actor request it made. Which responses count as rejected is up to the test case, through `journeyIsRejected()` (by default none are):
+
+```php
+protected function journeyIsRejected(TestResponse $response): bool
+{
+    return $response->isClientError() || $response->json('status') === 'error';
+}
+```
+
+Once any execution had no effect, the `RUNABOUT_COVERAGE` summary shows effect counts, and the reasons given to `noop()`:
+
+```
+  fulfil a request  12 runs in 8/11 trails, 3 effective (no effect: nothing pending)
+```
+
+To fail a run where steps never took effect, call `requireEffect()`. Checked once every trail has passed:
+
+```php
+->requireEffect()                                  // every declared step takes effect at least once
+->requireEffect('fulfil a request', atLeast: 0.25) // and this one in at least a quarter of its runs
+```
+
+A named step is checked in every interleaved instance, and a step no journey declares is an error. An optional step that never ran never took effect, so `requireEffect()` with no name also catches a branch the shuffles never reached.
+
 ## Collecting coverage yourself: `TrailCoverage`
 
 The aggregation is a plain object, `TrailCoverage`, so you can collect it yourself — across several runs, or to assert coverage properties in the test:

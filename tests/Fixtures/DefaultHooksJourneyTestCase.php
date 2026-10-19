@@ -18,6 +18,12 @@ final class DefaultHooksJourneyTestCase extends JourneyTestCase
     }
 
     /** @param TestResponse<Response> $response */
+    public function defaultIsRejected(TestResponse $response): bool
+    {
+        return $this->journeyIsRejected($response);
+    }
+
+    /** @param TestResponse<Response> $response */
     public function defaultResponsePolicy(TestResponse $response): void
     {
         $this->journeyResponsePolicy($response);
