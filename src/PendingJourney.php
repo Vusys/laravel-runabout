@@ -142,6 +142,19 @@ final class PendingJourney
     }
 
     /**
+     * Make each actor request behave like a fresh production request. Before
+     * every request, Laravel Context and scoped container instances are
+     * cleared (in a test process they otherwise outlive the request that set
+     * them), and the actor's user is reloaded, as freshActors() does.
+     */
+    public function isolateRequests(): self
+    {
+        $this->http = $this->http?->withIsolatedRequests();
+
+        return $this;
+    }
+
+    /**
      * Bias the shuffled picker toward repeatable steps: each repeatable
      * step's weight is multiplied by $bias. Re-running steps is how
      * idempotency, replace-logic, and counter bugs surface, so this mode

@@ -98,6 +98,21 @@ $this->journey(PermissionsJourney::class)->freshActors()->run();
 
 It is off by default, so existing journeys keep the outcomes they had. It can change a journey's outcome, never its trails.
 
+## Isolating each request
+
+Test requests share one application instance, so request-scoped state outlives the request that set it: Laravel `Context` (`Context::add()`, hidden context), scoped container bindings (`$app->scoped(...)`), and anything the app keeps in them. In production each request starts with both empty. In a journey, a value one request sets is still there for every later request in the trail, and for later trails too. For example, an endpoint that marks its request as a bulk operation, so a listener skips per-item notifications, silently changes every request after it.
+
+Call `isolateRequests()` to clear that state before every actor request:
+
+```php
+$this->journey(SomeJourney::class)->isolateRequests()->run();
+```
+
+- Before each actor request, Laravel `Context` is flushed and scoped container instances are forgotten.
+- It also reloads the actor's user, as [`freshActors()`](#reloading-users-before-each-request) does, so each actor request behaves like a fresh production request.
+- State a step sets directly (outside a request) is cleared before the step's next request too. If a journey sets `Context` in `aroundStep()` to emulate middleware, leave this off.
+- It's off by default, so existing outcomes don't change.
+
 ## Carrying session / tenancy state
 
 If your app carries tenancy (or anything else) in the session, attach it to the actor and it rides along with every request that actor makes — driving the full middleware stack, no per-request session juggling:
