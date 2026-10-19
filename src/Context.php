@@ -43,6 +43,16 @@ final class Context
     /** @var TestResponse<Response>|null The response of the running step's most recent actor request. */
     private ?TestResponse $stepResponse = null;
 
+    /** Whether the running step said it had no effect, with noop(), and why. */
+    private bool $noop = false;
+
+    private string $noopReason = '';
+
+    /** Whether the running step made an actor request, and whether the app accepted any. */
+    private bool $madeRequest = false;
+
+    private bool $requestAccepted = false;
+
     private bool $clockUnwindRegistered = false;
 
     private DrawSource $source;
@@ -303,10 +313,46 @@ final class Context
         return $response;
     }
 
-    /** @internal Forget the previous step's response before the next execution runs. */
+    /** @internal Forget the previous step's response and effect before the next execution runs. */
     public function beginExecution(): void
     {
         $this->stepResponse = null;
+        $this->noop = false;
+        $this->noopReason = '';
+        $this->madeRequest = false;
+        $this->requestAccepted = false;
+    }
+
+    /**
+     * Say that this execution of the step had no effect: its act found
+     * nothing to do (no pending item, nothing eligible). The step still
+     * counts as run, but the coverage report and requireEffect() count it as
+     * ineffective, so a journey can't pass while its interesting steps never
+     * did anything. The coverage report lists the reasons given.
+     */
+    public function noop(string $reason = ''): void
+    {
+        $this->noop = true;
+        $this->noopReason = $reason;
+    }
+
+    /** @internal Why the running step said it had no effect, if it gave a reason. */
+    public function noopReason(): string
+    {
+        return $this->noopReason;
+    }
+
+    /** @internal Note an actor request the running step made, and whether the app rejected it. */
+    public function noteRequest(bool $rejected): void
+    {
+        $this->madeRequest = true;
+        $this->requestAccepted = $this->requestAccepted || ! $rejected;
+    }
+
+    /** @internal Whether the running step had an effect: no noop(), and not every actor request it made was rejected. */
+    public function tookEffect(): bool
+    {
+        return ! $this->noop && (! $this->madeRequest || $this->requestAccepted);
     }
 
     /**

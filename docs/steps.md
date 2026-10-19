@@ -36,6 +36,28 @@ Step::make('cast vote')
 
 Omit the third closure and the step claims nothing when the condition is false. `assert()` and `assertWhen()` mix freely on one step — though genuinely n-way logic is usually still clearer as a single `assert()` with control flow.
 
+### Saying a step had no effect: `noop()`
+
+A step often guards its own act: there's nothing pending to fulfil, no item available to check out. When the guard finds nothing to do, call `$ctx->noop()` with a reason:
+
+```php
+Step::make('fulfil a request')
+    ->repeatable()
+    ->act(function (Context $ctx): void {
+        $request = Request::query()->pending()->first();
+
+        if ($request === null) {
+            $ctx->noop('nothing pending');
+
+            return;
+        }
+
+        // ...
+    }),
+```
+
+The step still counts as run, so constraints and history are unaffected, but the [coverage report](observability.md#is-the-shuffle-count-buying-coverage-runabout_coverage) and [`requireEffect()`](observability.md#did-the-steps-do-anything-requireeffect) count the execution as ineffective. Without that, a journey whose interesting steps never did anything passes, and nothing says so.
+
 ## Constraints: when a step is eligible
 
 - **`after('a', 'b')`** — sugar precondition: the step is eligible only once each named step has run at least once. This is the usual way to express "you can't publish before you draft."

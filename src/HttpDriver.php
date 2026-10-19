@@ -25,6 +25,7 @@ final readonly class HttpDriver
      * @param  Closure(array<string, mixed>): void|null  $session  Applies session data to the next request; null when the test case exposes no session.
      * @param  bool  $freshUsers  Reload a saved Eloquent user before each request, as production resolves it from the session.
      * @param  bool  $isolatedRequests  Clear Laravel Context and scoped container instances before each request, as a production request starts without them.
+     * @param  list<Closure(TestResponse<Response>): bool>  $rejectionRules  A response any of these returns true for was rejected by the app.
      */
     public function __construct(
         private Closure $authenticate,
@@ -33,12 +34,57 @@ final readonly class HttpDriver
         private ?Closure $session = null,
         private bool $freshUsers = false,
         private bool $isolatedRequests = false,
+        private array $rejectionRules = [],
     ) {}
 
     /** A copy of this driver that reloads a saved Eloquent user before each request. */
     public function withFreshUsers(): self
     {
-        return new self($this->authenticate, $this->json, $this->form, $this->session, true, $this->isolatedRequests);
+        return $this->copy(freshUsers: true);
+    }
+
+    /**
+     * A copy of this driver that also treats a response $rule returns true
+     * for as rejected by the app (a validation error, a refusal). A step
+     * whose actor requests were all rejected had no effect.
+     *
+     * @param  Closure(TestResponse<Response>): bool  $rule
+     */
+    public function withRejectionRule(Closure $rule): self
+    {
+        return $this->copy(rejectionRules: [...$this->rejectionRules, $rule]);
+    }
+
+    /**
+     * Whether any rejection rule says the app rejected this response.
+     *
+     * @param  TestResponse<Response>  $response
+     */
+    public function rejects(TestResponse $response): bool
+    {
+        foreach ($this->rejectionRules as $rule) {
+            if ($rule($response)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<Closure(TestResponse<Response>): bool>|null  $rejectionRules
+     */
+    private function copy(?bool $freshUsers = null, ?bool $isolatedRequests = null, ?array $rejectionRules = null): self
+    {
+        return new self(
+            $this->authenticate,
+            $this->json,
+            $this->form,
+            $this->session,
+            $freshUsers ?? $this->freshUsers,
+            $isolatedRequests ?? $this->isolatedRequests,
+            $rejectionRules ?? $this->rejectionRules,
+        );
     }
 
     /**
@@ -48,7 +94,7 @@ final readonly class HttpDriver
      */
     public function withIsolatedRequests(): self
     {
-        return new self($this->authenticate, $this->json, $this->form, $this->session, true, true);
+        return $this->copy(freshUsers: true, isolatedRequests: true);
     }
 
     /** Authenticate the next request; every actor request calls this first. */

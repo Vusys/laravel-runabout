@@ -158,7 +158,10 @@ final readonly class Actor
         $this->http->authenticate($this->user, $this->guard);
         $this->http->applySession($this->session);
 
-        return $this->context->rememberResponse($this->http->json($method, $uri, $data, $headers));
+        $response = $this->context->rememberResponse($this->http->json($method, $uri, $data, $headers));
+        $this->context->noteRequest($this->http->rejects($response));
+
+        return $response;
     }
 
     /**
@@ -171,6 +174,9 @@ final readonly class Actor
         $this->http->authenticate($this->user, $this->guard);
         $this->http->applySession($this->session);
 
-        return $this->context->rememberResponse($this->http->form($method, $uri, $data, $headers));
+        $response = $this->context->rememberResponse($this->http->form($method, $uri, $data, $headers));
+        $this->context->noteRequest($this->http->rejects($response));
+
+        return $response;
     }
 }

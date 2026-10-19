@@ -14,6 +14,7 @@ protected function interleave(string|Journey ...$journeys): PendingJourney
 protected function journeyHttpDriver(): HttpDriver
 protected function wrapTrail(Closure $trail): void
 protected function journeyAssertionCounter(): ?Closure            // counts passing invariant checks as assertions
+protected function journeyIsRejected(TestResponse $response): bool     // whether the app rejected the request; default false
 ```
 
 `journey()` accepts a class-string or an instance; `interleave()` takes instances when each needs its own constructor state. Override `wrapTrail()` to change the reset for every journey the test case runs, and `journeyHttpDriver()` to change how actors reach the app. Each passing invariant check adds one to the test's assertion count; override `journeyAssertionCounter()` to return `null` to turn that off.
@@ -63,6 +64,7 @@ public function repeatHeavy(int $bias = 5): self
 public function minLength(int $executions): self                   // default 0: stop once minimums are met
 public function freshActors(): self                                // reload each actor's user before every request
 public function isolateRequests(): self                            // clear Context and scoped instances before every request, and reload users
+public function requireEffect(?string $step = null, float $atLeast = 0.0): self   // fail the run unless steps took effect
 public function exhaustive(int $limit = 720): self
 
 // Replay
@@ -109,6 +111,7 @@ public function randomizer(): Randomizer                           // escape hat
 // Run history
 public function timesRan(string $step): int
 public function ranBefore(string $step): bool
+public function noop(string $reason = ''): void                    // this execution had no effect
 
 // Actors
 public function actingAs(Authenticatable $user, string $name, array $session = [], ?string $guard = null): Actor
@@ -213,6 +216,8 @@ public function artifact(): array       // {seed, steps} — the RUNABOUT_TRAIL 
 public function describe(bool $markLast = true): string
 public function drawsAt(int $index): array
 public function isOpaqueAt(int $index): bool
+public function tookEffect(int $index): bool                       // false after noop(), or when every actor request was rejected
+public function ineffectiveReason(int $index): ?string             // the reason given to noop(); null when the execution had an effect
 ```
 
 ## `TrailCoverage`
@@ -225,6 +230,7 @@ public function record(Trail $trail): void                         // pass to on
 public function trails(): int
 public function distinctOrderings(): int
 public function stepRuns(): array                                  // array<string, int>
+public function effectiveRuns(): array                             // array<string, int>: executions that had an effect
 public function timesBefore(string $before, string $after): int
 public function unseenPairs(): array                               // list<array{string, string}>
 public function describe(): string
