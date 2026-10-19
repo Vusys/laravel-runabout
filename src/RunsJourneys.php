@@ -19,7 +19,7 @@ trait RunsJourneys
     {
         $journey = is_string($journey) ? new $journey : $journey;
 
-        return new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver());
+        return new PendingJourney($journey, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter());
     }
 
     /**
@@ -36,7 +36,22 @@ trait RunsJourneys
             $journeys,
         ));
 
-        return new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver());
+        return new PendingJourney($instances, $this->wrapTrail(...), $this->journeyHttpDriver(), $this->journeyAssertionCounter());
+    }
+
+    /**
+     * Passing invariant checks count as assertions, so a journey that only
+     * uses invariants isn't reported as risky for performing none.
+     *
+     * Override to return null to leave the count alone.
+     *
+     * @return (Closure(): void)|null
+     */
+    protected function journeyAssertionCounter(): ?Closure
+    {
+        return function (): void {
+            $this->addToAssertionCount(1);
+        };
     }
 
     /**

@@ -13,9 +13,10 @@ protected function journey(string|Journey $journey): PendingJourney
 protected function interleave(string|Journey ...$journeys): PendingJourney
 protected function journeyHttpDriver(): HttpDriver
 protected function wrapTrail(Closure $trail): void
+protected function journeyAssertionCounter(): ?Closure            // counts passing invariant checks as assertions
 ```
 
-`journey()` accepts a class-string or an instance; `interleave()` takes instances when each needs its own constructor state. Override `wrapTrail()` to change the reset for every journey the test case runs, and `journeyHttpDriver()` to change how actors reach the app.
+`journey()` accepts a class-string or an instance; `interleave()` takes instances when each needs its own constructor state. Override `wrapTrail()` to change the reset for every journey the test case runs, and `journeyHttpDriver()` to change how actors reach the app. Each passing invariant check adds one to the test's assertion count; override `journeyAssertionCounter()` to return `null` to turn that off.
 
 ## `Journey`
 

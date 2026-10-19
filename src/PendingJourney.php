@@ -57,11 +57,13 @@ final class PendingJourney
     /**
      * @param  Journey|list<Journey>  $journey  One journey, or several to interleave into each trail.
      * @param  Closure(Closure): void  $wrapper  Wraps each trail; the default (from RunsJourneys) rolls back a database transaction.
+     * @param  (Closure(): void)|null  $countAssertions  Adds passing invariant checks to the test case's assertion count (RunsJourneys passes addToAssertionCount()).
      */
     public function __construct(
         Journey|array $journey,
         private Closure $wrapper,
         private ?HttpDriver $http = null,
+        private readonly ?Closure $countAssertions = null,
     ) {
         $journeys = is_array($journey) ? $journey : [$journey];
 
@@ -319,7 +321,7 @@ final class PendingJourney
 
     private function execute(): void
     {
-        $runner = new JourneyRunner;
+        $runner = new JourneyRunner($this->countAssertions);
 
         $exhaustiveLimit = $this->exhaustiveLimit;
 
