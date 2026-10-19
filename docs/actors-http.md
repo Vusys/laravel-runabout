@@ -26,7 +26,7 @@ Step::make('cast vote')
 
 - `$ctx->actingAs($user, 'name', $session = [], guard: null)` — register a named actor authenticated as `$user`, optionally with session state and on a [named guard](#apps-with-several-guards). Returns the `Actor`.
 - `$ctx->as('name')` — get a previously registered actor.
-- `$ctx->lastResponse()` — the most recent `TestResponse` returned by any actor.
+- `$ctx->lastResponse()` — the most recent `TestResponse` returned by any actor in a step. Requests an invariant makes are observations, so they don't replace it.
 
 Every request made through `$ctx->as('name')` is authenticated as that actor's user, so a journey can hop freely between participants. Actors proxy the full set of test HTTP verbs, each returning a `TestResponse`:
 

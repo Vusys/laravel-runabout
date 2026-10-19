@@ -4,6 +4,10 @@ All notable changes to `vusys/laravel-runabout` are documented here. The format 
 
 ## [Unreleased]
 
+### Fixed
+
+- A request an invariant makes through an actor no longer replaces `lastResponse()`. An invariant that asks "what does this actor see?" made the next step's `lastResponse()` return the invariant's response, so a step that asserted on the previous step's response without making a request of its own checked the wrong one. Requests made while invariants are checked, including `fromStart()` baseline checks, are still returned to the invariant, and are no longer recorded. ([#78](https://github.com/Vusys/laravel-runabout/issues/78))
+
 ## [1.3.0] - 2026-10-17
 
 Actors that behave more like production users, and a coverage report without false gaps. Actors can log in on a named guard, `freshActors()` reloads their users before each request, and `RUNABOUT_COVERAGE` leaves out pairs `after()` makes impossible. Every 1.2 seed and `RUNABOUT_TRAIL` artifact replays unchanged.

@@ -38,6 +38,8 @@ final class Context
     /** @var TestResponse<Response>|null */
     private ?TestResponse $lastResponse = null;
 
+    private bool $checkingInvariants = false;
+
     private bool $clockUnwindRegistered = false;
 
     private DrawSource $source;
@@ -288,7 +290,30 @@ final class Context
      */
     public function rememberResponse(TestResponse $response): TestResponse
     {
-        return $this->lastResponse = $response;
+        // A request an invariant makes is an observation, not part of the
+        // trail, so it must not become the response a step asserts on.
+        if (! $this->checkingInvariants) {
+            $this->lastResponse = $response;
+        }
+
+        return $response;
+    }
+
+    /**
+     * @internal Run invariant checks without letting their requests replace
+     * lastResponse().
+     *
+     * @param  Closure(): void  $checks
+     */
+    public function checkingInvariants(Closure $checks): void
+    {
+        $this->checkingInvariants = true;
+
+        try {
+            $checks();
+        } finally {
+            $this->checkingInvariants = false;
+        }
     }
 
     /**

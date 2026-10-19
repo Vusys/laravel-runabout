@@ -195,7 +195,7 @@ public function patchJson(string $uri, array $data = [], array $headers = []): T
 public function deleteJson(string $uri, array $data = [], array $headers = []): TestResponse
 ```
 
-Every request authenticates as the actor's user, on its guard if it has one, and applies its session data first. The response is also recorded as the context's `lastResponse()`.
+Every request authenticates as the actor's user, on its guard if it has one, and applies its session data first. The response is also recorded as the context's `lastResponse()`, unless the request was made while an invariant was being checked.
 
 ## `Trail`
 
