@@ -47,6 +47,13 @@ final class TokenActorsTest extends TestCase
 
         $router->get('/whoami', $whoami);
         $router->middleware('web')->get('/page', $whoami);
+        // As `auth:admin` middleware does, for the rest of the test app's life.
+        $router->get('/switch', function (): JsonResponse {
+            Auth::shouldUse('admin');
+
+            return new JsonResponse;
+        });
+        $router->get('/default', fn (): JsonResponse => new JsonResponse(['default' => Auth::getDefaultDriver()]));
     }
 
     public function test_a_token_actor_sends_its_token_with_nobody_logged_in(): void
@@ -133,6 +140,27 @@ final class TokenActorsTest extends TestCase
                 })];
             }
         })->isolateRequests()->shuffles(0)->run();
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_a_token_actors_request_starts_on_the_default_guard(): void
+    {
+        $user = User::query()->create(['name' => 'integration']);
+
+        $this->journey(new class($user) extends Journey
+        {
+            public function __construct(private readonly User $user) {}
+
+            public function steps(): array
+            {
+                return [Step::make('integrate')->act(function (Context $ctx): void {
+                    $actor = $ctx->actingWithToken($this->user, 'plain-token', 'integration');
+                    $actor->getJson('/switch');
+                    $actor->getJson('/default')->assertExactJson(['default' => 'web']);
+                })];
+            }
+        })->shuffles(0)->run();
 
         $this->addToAssertionCount(1);
     }

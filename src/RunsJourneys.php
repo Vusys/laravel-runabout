@@ -116,12 +116,14 @@ trait RunsJourneys
                 }
 
                 $named = $named || $guard !== null;
+                $reset = $named || ! $user instanceof Authenticatable;
 
                 // In production each request starts on the configured default
                 // guard and with only its own actor's session. The test app
                 // outlives a request, and `auth:admin` middleware switches the
-                // default guard, so undo both once a named guard is in play.
-                if ($named) {
+                // default guard, so undo both once a named guard is in play,
+                // and for every guest or token request.
+                if ($reset) {
                     Auth::shouldUse($default);
 
                     foreach ($guards as $other) {
@@ -147,7 +149,7 @@ trait RunsJourneys
 
                 // After authenticating: a helper such as Passport::actingAs()
                 // also makes its guard the default.
-                if ($named) {
+                if ($reset) {
                     Auth::shouldUse($default);
                 }
             },
