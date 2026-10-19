@@ -12,6 +12,7 @@ The trait mixed into a test case. See [Installation](installation.md).
 protected function journey(string|Journey $journey): PendingJourney
 protected function interleave(string|Journey ...$journeys): PendingJourney
 protected function journeyHttpDriver(): HttpDriver
+protected function journeyAuthenticate(Authenticatable $user, ?string $guard): void   // logs an actor in before each request; null is the default guard
 protected function wrapTrail(Closure $trail): void
 protected function journeyAssertionCounter(): ?Closure            // counts passing invariant checks as assertions
 protected function journeyIsRejected(TestResponse $response): bool     // whether the app rejected the request; default false

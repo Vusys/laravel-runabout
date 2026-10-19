@@ -76,6 +76,24 @@ Once a named guard is in play, every actor request also starts the way a product
 
 Journeys whose actors all use the default guard behave as before.
 
+### Token guards
+
+Setting the user on a token guard (Sanctum, Passport) attaches no access token, so token abilities and scopes, and anything the app reads off the current token (a tenant or team id), are missing. Override `journeyAuthenticate()` on the test case to log actors in your own way. It's called before every actor request, with the guard the actor uses (`null` for the default guard), and by default logs in with `actingAs()` on the default guard and `setUser()` on a named one:
+
+```php
+use Illuminate\Contracts\Auth\Authenticatable;
+use Laravel\Sanctum\Sanctum;
+
+protected function journeyAuthenticate(Authenticatable $user, ?string $guard): void
+{
+    $guard === 'sanctum'
+        ? Sanctum::actingAs($user, ['orders:write'], 'sanctum')
+        : parent::journeyAuthenticate($user, $guard);
+}
+```
+
+For Passport, `Passport::actingAs($user, ['orders:write'], 'api')` attaches scopes the same way. `parent::` reaches the default when `RunsJourneys` is used on a base test case. On a test case that uses the trait directly, alias the default instead: `use RunsJourneys { journeyAuthenticate as defaultJourneyAuthenticate; }`. Both helpers also make their guard the default, which Runabout undoes before the request is sent.
+
 ## Reloading users before each request
 
 An actor holds one user instance for the whole run, as Laravel's `actingAs()` does. In production each request loads the user from the session afresh. So these go stale:
