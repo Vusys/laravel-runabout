@@ -152,6 +152,32 @@ $this->journey(SomeJourney::class)->isolateRequests()->run();
 - State a step sets directly (outside a request) is cleared before the step's next request too. If a journey sets `Context` in `aroundStep()` to emulate middleware, leave this off.
 - It's off by default, so existing outcomes don't change.
 
+## Driving server-rendered forms
+
+When a step drives a server-rendered form with `post()`, `put()` or `patch()`, it's tempting to send only the fields the step cares about. A real form posts every field back, pre-filled with its current value, and many controllers treat a missing field as "clear it". A partial payload then produces a false bug: a field the journey's own request wiped looks like the app losing data.
+
+- **Send what the real form sends**, including the fields the step isn't changing, with their current values. Building the payload from the model keeps it honest:
+
+    ```php
+    $ticket = $ctx->instance('ticket', Ticket::class)->fresh();
+
+    $ctx->as('agent')->put("/tickets/{$ticket->id}", [
+        ...$ticket->only(['title', 'description', 'priority', 'assignee_id']),
+        'status' => 'resolved',
+    ]);
+    ```
+
+- **Mirror checkbox semantics.** A browser omits an unticked checkbox entirely and sends the box's value for a ticked one, so send `'notify' => '1'` or leave the key out, rather than `'notify' => false`. If the form pairs the checkbox with a hidden field (the usual way to post a 0), send that instead.
+- **Include the hidden fields the form always posts**, such as a redirect target, a `_method` override, or a version or lock token.
+- **Assert on state after a form post, not on the redirect.** Most form endpoints redirect whatever happens, back to the form with errors or on to the next page, so `assertRedirect()` passes on a rejected submission. Check the database, or the [last response](reproducing-failures.md#when-a-steps-request-was-rejected)'s session errors with `assertSessionHasNoErrors()`. To count rejected submissions as steps that had [no effect](steps.md#saying-a-step-had-no-effect-noop), override `journeyIsRejected()`:
+
+    ```php
+    protected function journeyIsRejected(TestResponse $response): bool
+    {
+        return $response->isRedirect() && session()->has('errors');
+    }
+    ```
+
 ## Carrying session / tenancy state
 
 If your app carries tenancy (or anything else) in the session, attach it to the actor and it rides along with every request that actor makes — driving the full middleware stack, no per-request session juggling:
