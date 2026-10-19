@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Routing\Router;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Assert;
@@ -44,6 +45,12 @@ final class FailureResponseSummaryTest extends TestCase
         $router->post('/items', fn (): JsonResponse => new JsonResponse(['message' => 'The name field is required.'], 422));
         $router->get('/long', fn (): JsonResponse => new JsonResponse(['text' => str_repeat('x', 400)]));
         $router->get('/ok', fn (): JsonResponse => new JsonResponse(['ok' => true]));
+        $router->get('/text', fn (): Response => new Response("  plain text, padded \n", 500));
+        $router->get('/pretty', fn (): Response => new Response("{\n    \"ok\": false\n}", 400, ['Content-Type' => 'application/json']));
+        $router->get('/accents', fn (): Response => new Response(str_repeat('é', 299), 200));
+        $router->get('/exact', fn (): Response => new Response(str_repeat('y', 300), 200));
+        $router->get('/accents-long', fn (): Response => new Response(str_repeat('é', 400), 200));
+        $router->get('/slashes', fn (): JsonResponse => new JsonResponse(['url' => 'https://example.com/a/b', 'name' => 'Zoë'], 409));
         $router->middleware('web')->post('/form', function (Request $request): void {
             $request->validate(['name' => ['required']]);
         });
@@ -72,6 +79,38 @@ final class FailureResponseSummaryTest extends TestCase
 
         $this->assertStringContainsString('Last response (GET /long): 200', $message);
         $this->assertStringContainsString('{"text":"'.str_repeat('x', 291).'…', $message);
+    }
+
+    public function test_a_plain_text_body_is_trimmed_and_shown_as_it_is(): void
+    {
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/text'), fn () => Assert::fail('rejected'));
+
+        $this->assertStringEndsWith("Last response (GET /text): 500\n  body: plain text, padded", $message);
+    }
+
+    public function test_a_pretty_printed_json_body_is_compacted(): void
+    {
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/pretty'), fn () => Assert::fail('rejected'));
+
+        $this->assertStringEndsWith("Last response (GET /pretty): 400\n  body: {\"ok\":false}", $message);
+    }
+
+    public function test_the_body_limit_counts_characters_not_bytes(): void
+    {
+        $accents = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/accents'), fn () => Assert::fail('rejected'));
+        $exact = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/exact'), fn () => Assert::fail('rejected'));
+
+        // 299 two-byte characters, and exactly the 300-character limit: neither is cut.
+        $this->assertStringEndsWith('  body: '.str_repeat('é', 299), $accents);
+        $this->assertStringEndsWith('  body: '.str_repeat('y', 300), $exact);
+        $this->assertStringEndsWith('  body: '.str_repeat('é', 300).'…', $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/accents-long'), fn () => Assert::fail('rejected')));
+    }
+
+    public function test_json_keeps_slashes_and_unicode_readable(): void
+    {
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/slashes'), fn () => Assert::fail('rejected'));
+
+        $this->assertStringEndsWith('  body: {"url":"https://example.com/a/b","name":"Zoë"}', $message);
     }
 
     public function test_a_step_that_made_no_request_shows_no_response_even_after_an_earlier_one(): void
