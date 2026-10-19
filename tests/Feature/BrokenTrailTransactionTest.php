@@ -131,6 +131,7 @@ final class BrokenTrailTransactionTest extends TestCase
             $this->assertStringStartsWith('Rolling back the trail\'s transaction on connection "testing" failed: ', $caught->getMessage());
             $this->assertStringEndsWith(' Something in the trail ended the transaction (an implicit commit, usually a schema change on MySQL or MariaDB), so its rows were not rolled back. Use resetByTruncating(...) for journeys that run schema changes.', $caught->getMessage());
             $this->assertNotNull($caught->getPrevious());
+            $this->assertSame(0, $caught->getCode());
         } finally {
             $this->resyncTransactions();
         }
