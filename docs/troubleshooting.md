@@ -163,6 +163,22 @@ The mirror image — trail 2 failing because trail 1's rows are *still there* �
 
 Laravel `Context` and scoped bindings outlive the request that set them in a test process, unlike production. Call [`isolateRequests()`](actors-http.md#isolating-each-request) to clear them before every actor request.
 
+## My shrunk trail passes when I replay it
+
+The replay isn't broken, and the bug probably isn't flaky. The failure depended on state an earlier trail left behind, so it only reproduced in the process that ran those trails. Shrinking replays candidate trails in that same process, after everything the run did before the failure, so they inherit the leaked state and still fail. `RUNABOUT_TRAIL` replays the minimal trail on its own in a fresh process, without that state, and it passes.
+
+To confirm it:
+
+- **Replay the full trail** with the `RUNABOUT_SEED` from the failure (shown for shuffled and repeat-heavy trails). If the full trail fails on its own and the minimal one passes, the minimal trail relied on state from the executions shrinking removed.
+- **Run the journey with `->shuffles(0)`**, so only the canonical trail runs. If the failure disappears, it needs an earlier trail.
+
+The usual causes, and their fixes:
+
+- **Cache entries and rate-limiter counters** in an in-memory store: flush them after each trail with [`resetExternal()`](database-resets.md#multiple-connections-and-external-stores).
+- **Laravel `Context` and scoped container instances** set by one request: [`isolateRequests()`](actors-http.md#isolating-each-request).
+- **Static memo caches and singletons** in app code: reset them with `resetExternal()` too.
+- **The actor's user instance**, which still carries the permissions or relations it had when the run started: [`freshActors()`](actors-http.md#reloading-users-before-each-request).
+
 ## A step "ended the trail's database transaction"
 
 The step ran something that committed the trail's transaction, almost always a schema change on MySQL or MariaDB, which commits implicitly. See [Schema changes inside a trail](database-resets.md#schema-changes-inside-a-trail). If the reset itself reports `Rolling back the trail's transaction … failed`, the same thing happened somewhere Runabout doesn't check, such as inside a custom `wrapTrail()`.
