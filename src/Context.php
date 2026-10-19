@@ -254,12 +254,18 @@ final class Context
      * applied to every request the actor makes (for apps that carry tenancy or
      * other state in the session), and can be extended per request with
      * Actor::withSession(). A $guard logs the actor in on that guard instead
-     * of the default one, for apps with several (a storefront and an admin).
+     * of the default one, for apps with several (a storefront and an admin);
+     * a list logs it in on each, for a user of both the UI and the API.
      *
      * @param  array<string, mixed>  $session
+     * @param  string|list<string>|null  $guard
      */
-    public function actingAs(Authenticatable $user, string $name, array $session = [], ?string $guard = null): Actor
+    public function actingAs(Authenticatable $user, string $name, array $session = [], string|array|null $guard = null): Actor
     {
+        if ($guard === []) {
+            throw new RuntimeException(sprintf('Actor "%s" has an empty list of guards. Name at least one, or pass null for the default guard.', $name));
+        }
+
         if (! $this->http instanceof HttpDriver) {
             throw new RuntimeException(
                 'No HTTP driver is bound to this context. Actors are available when the journey runs through RunsJourneys::journey() on a Laravel test case.',

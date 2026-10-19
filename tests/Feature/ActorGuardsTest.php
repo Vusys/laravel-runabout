@@ -7,6 +7,8 @@ namespace Vusys\Runabout\Tests\Feature;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Auth;
+use RuntimeException;
+use Vusys\Runabout\Actor;
 use Vusys\Runabout\Context;
 use Vusys\Runabout\Journey;
 use Vusys\Runabout\RunsJourneys;
@@ -105,5 +107,55 @@ final class ActorGuardsTest extends TestCase
         })->run();
 
         $this->addToAssertionCount(1);
+    }
+
+    public function test_an_actor_on_several_guards_is_logged_in_on_each(): void
+    {
+        $shopper = User::query()->create(['name' => 'shopper']);
+        $admin = User::query()->create(['name' => 'admin']);
+
+        $this->journey(new class($shopper, $admin) extends Journey
+        {
+            public function __construct(private readonly User $shopper, private readonly User $admin) {}
+
+            #[\Override]
+            public function actors(): array
+            {
+                return ['shopper' => $this->shopper, 'admin' => [$this->admin, ['web', 'admin']]];
+            }
+
+            public function steps(): array
+            {
+                return [
+                    Step::make('shop')->repeatable(max: 3)->act(fn (Context $ctx) => $ctx->as('shopper')->getJson('/whoami')
+                        ->assertExactJson(['default' => 'web', 'web' => $this->shopper->id, 'admin' => null])),
+                    Step::make('administer')->repeatable(max: 3)->act(function (Context $ctx): void {
+                        $ctx->as('admin')->getJson('/admin')->assertOk();
+                        $ctx->as('admin')->getJson('/whoami')
+                            ->assertExactJson(['default' => 'web', 'web' => $this->admin->id, 'admin' => $this->admin->id]);
+                    }),
+                    Step::make('register a mid-trail admin')->act(function (Context $ctx): void {
+                        $ctx->actingAs($this->admin, 'late admin', guard: ['admin', 'web'])->getJson('/whoami')
+                            ->assertExactJson(['default' => 'web', 'web' => $this->admin->id, 'admin' => $this->admin->id]);
+                    }),
+                ];
+            }
+        })->shuffles(4)->run();
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_an_actor_needs_at_least_one_guard_in_a_list(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Actor "admin" has an empty list of guards. Name at least one, or pass null for the default guard.');
+
+        $this->journey(new class extends Journey
+        {
+            public function steps(): array
+            {
+                return [Step::make('register')->act(fn (Context $ctx): Actor => $ctx->actingAs(new User, 'admin', guard: []))];
+            }
+        })->run();
     }
 }

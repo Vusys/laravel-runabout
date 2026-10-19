@@ -24,7 +24,7 @@ Step::make('cast vote')
 
 ## Registering and switching actors
 
-- `$ctx->actingAs($user, 'name', $session = [], guard: null)` — register a named actor authenticated as `$user`, optionally with session state and on a [named guard](#apps-with-several-guards). Returns the `Actor`.
+- `$ctx->actingAs($user, 'name', $session = [], guard: null)` — register a named actor authenticated as `$user`, optionally with session state and on a [named guard](#apps-with-several-guards), or a list of them. Returns the `Actor`.
 - `$ctx->as('name')` — get a previously registered actor.
 - `$ctx->lastResponse()` — the most recent `TestResponse` returned by any actor in a step. Requests an invariant makes are observations, so they don't replace it.
 
@@ -75,6 +75,14 @@ Once a named guard is in play, every actor request also starts the way a product
 - Runabout logs out every other actor's guard. In production each actor has its own session, so an admin request does not also arrive logged in as the last shopper.
 
 Journeys whose actors all use the default guard behave as before.
+
+An actor can log in on several guards at once, for a user of both the UI (a session guard) and the API (a token guard). It is authenticated on each guard listed before every request, through `journeyAuthenticate()` like a single guard:
+
+```php
+return ['admin' => [$this->adminUser, ['web', 'api']]];
+
+$ctx->actingAs($user, 'admin', guard: ['web', 'api']);  // the same, mid-trail
+```
 
 ### Token guards
 

@@ -19,7 +19,7 @@ use Vusys\Runabout\Support\FrameworkState;
 final readonly class HttpDriver
 {
     /**
-     * @param  Closure(?Authenticatable, ?string): void  $authenticate  Authenticates the user on the named guard, or the default one for null. A null user is a guest.
+     * @param  Closure(?Authenticatable, string|non-empty-list<string>|null): void  $authenticate  Authenticates the user on the named guard (or each of a list of guards), or the default one for null. A null user is a guest.
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $json
      * @param  Closure(string, string, array<string, mixed>, array<string, string>): TestResponse<Response>  $form
      * @param  Closure(array<string, mixed>): void|null  $session  Applies session data to the next request; null when the test case exposes no session.
@@ -97,8 +97,12 @@ final readonly class HttpDriver
         return $this->copy(freshUsers: true, isolatedRequests: true);
     }
 
-    /** Authenticate the next request; every actor request calls this first. */
-    public function authenticate(Authenticatable $user, ?string $guard = null): void
+    /**
+     * Authenticate the next request; every actor request calls this first.
+     *
+     * @param  string|non-empty-list<string>|null  $guard
+     */
+    public function authenticate(Authenticatable $user, string|array|null $guard = null): void
     {
         if ($this->isolatedRequests) {
             FrameworkState::flushRequestState();
