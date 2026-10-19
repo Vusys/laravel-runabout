@@ -387,7 +387,7 @@ final class JourneyRunner
                 $this->wrapped($owner, function () use ($owner, $instance, $step): void {
                     foreach ($owner->invariants as $invariant) {
                         try {
-                            $invariant->check($owner->context);
+                            $owner->context->checkingInvariants(fn () => $invariant->check($owner->context));
                         } catch (Throwable $caught) {
                             throw InvariantViolationException::make(
                                 $owner->labelled($invariant->name()),
@@ -435,7 +435,7 @@ final class JourneyRunner
             $this->wrapped($owner, function () use ($owner, $baseline): void {
                 foreach ($baseline as $invariant) {
                     try {
-                        $invariant->check($owner->context);
+                        $owner->context->checkingInvariants(fn () => $invariant->check($owner->context));
                     } catch (Throwable $caught) {
                         throw InvariantViolationException::make(
                             $owner->labelled($invariant->name()),
