@@ -83,6 +83,20 @@ final class ContextTest extends TestCase
         $this->assertSame('one', $picked);
     }
 
+    public function test_pick_keeps_every_option_an_iterable_yields_under_a_repeated_key(): void
+    {
+        $ctx = $this->context();
+        $picked = [];
+        for ($i = 0; $i < 50; $i++) {
+            $picked[] = $ctx->pick((static function (): \Generator {
+                yield 'same' => 'first';
+                yield 'same' => 'second';
+            })());
+        }
+
+        $this->assertEqualsCanonicalizing(['first', 'second'], array_values(array_unique($picked)));
+    }
+
     public function test_pick_from_nothing_says_so(): void
     {
         $this->expectException(RuntimeException::class);
