@@ -48,6 +48,49 @@ final class ContextTest extends TestCase
         $ctx->instance('thing', stdClass::class);
     }
 
+    public function test_boolean_returns_the_remembered_bool(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('refused', false);
+
+        $this->assertFalse($ctx->boolean('refused'));
+    }
+
+    public function test_boolean_rejects_a_non_bool(): void
+    {
+        $ctx = $this->context();
+        $ctx->remember('refused', 0);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Context key "refused" holds int, expected bool.');
+
+        $ctx->boolean('refused');
+    }
+
+    public function test_pick_takes_a_keyed_array_and_ignores_its_keys(): void
+    {
+        $picked = $this->context()->pick([10 => 'only']);
+
+        $this->assertSame('only', $picked);
+    }
+
+    public function test_pick_takes_any_iterable(): void
+    {
+        $picked = $this->context()->pick((static function (): \Generator {
+            yield 'a' => 'one';
+        })());
+
+        $this->assertSame('one', $picked);
+    }
+
+    public function test_pick_from_nothing_says_so(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('pick() was given nothing to choose from');
+
+        $this->context()->pick([]);
+    }
+
     public function test_integer_returns_the_remembered_int(): void
     {
         $ctx = $this->context();
