@@ -68,14 +68,14 @@ final class FailureResponseSummaryTest extends TestCase
 
     public function test_a_redirect_shows_its_target_and_the_flashed_validation_errors(): void
     {
-        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->post('/form'), fn () => Assert::fail('rejected'));
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->post('/form'), fn (): never => Assert::fail('rejected'));
 
         $this->assertMatchesRegularExpression('/Last response \(POST \/form\): 302 → \S+\n  session errors: \{"name":\["The name field is required\."\]\}/', $message);
     }
 
     public function test_a_long_body_is_truncated(): void
     {
-        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/long'), fn () => Assert::fail('rejected'));
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/long'), fn (): never => Assert::fail('rejected'));
 
         $this->assertStringContainsString('Last response (GET /long): 200', $message);
         $this->assertStringContainsString('{"text":"'.str_repeat('x', 291).'…', $message);
@@ -83,32 +83,32 @@ final class FailureResponseSummaryTest extends TestCase
 
     public function test_a_plain_text_body_is_trimmed_and_shown_as_it_is(): void
     {
-        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/text'), fn () => Assert::fail('rejected'));
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/text'), fn (): never => Assert::fail('rejected'));
 
         $this->assertStringEndsWith("Last response (GET /text): 500\n  body: plain text, padded", $message);
     }
 
     public function test_a_pretty_printed_json_body_is_compacted(): void
     {
-        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/pretty'), fn () => Assert::fail('rejected'));
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/pretty'), fn (): never => Assert::fail('rejected'));
 
         $this->assertStringEndsWith("Last response (GET /pretty): 400\n  body: {\"ok\":false}", $message);
     }
 
     public function test_the_body_limit_counts_characters_not_bytes(): void
     {
-        $accents = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/accents'), fn () => Assert::fail('rejected'));
-        $exact = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/exact'), fn () => Assert::fail('rejected'));
+        $accents = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/accents'), fn (): never => Assert::fail('rejected'));
+        $exact = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/exact'), fn (): never => Assert::fail('rejected'));
 
         // 299 two-byte characters, and exactly the 300-character limit: neither is cut.
         $this->assertStringEndsWith('  body: '.str_repeat('é', 299), $accents);
         $this->assertStringEndsWith('  body: '.str_repeat('y', 300), $exact);
-        $this->assertStringEndsWith('  body: '.str_repeat('é', 300).'…', $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/accents-long'), fn () => Assert::fail('rejected')));
+        $this->assertStringEndsWith('  body: '.str_repeat('é', 300).'…', $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->get('/accents-long'), fn (): never => Assert::fail('rejected')));
     }
 
     public function test_json_keeps_slashes_and_unicode_readable(): void
     {
-        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/slashes'), fn () => Assert::fail('rejected'));
+        $message = $this->failureOf(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/slashes'), fn (): never => Assert::fail('rejected'));
 
         $this->assertStringEndsWith('  body: {"url":"https://example.com/a/b","name":"Zoë"}', $message);
     }
@@ -117,7 +117,7 @@ final class FailureResponseSummaryTest extends TestCase
     {
         $journey = $this->journeyWith(
             [Step::make('fetch')->act(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/ok')),
-                Step::make('fail without a request')->after('fetch')->act(fn () => Assert::fail('no request'))],
+                Step::make('fail without a request')->after('fetch')->act(fn (): never => Assert::fail('no request'))],
         );
 
         $this->assertStringNotContainsString('Last response', $this->messageOf($journey));
@@ -127,7 +127,7 @@ final class FailureResponseSummaryTest extends TestCase
     {
         $journey = $this->journeyWith(
             [Step::make('fetch')->act(fn (Context $ctx): TestResponse => $ctx->as('ana')->getJson('/ok'))],
-            [Invariant::make('never holds', fn () => Assert::fail('violated'))],
+            [Invariant::make('never holds', fn (): never => Assert::fail('violated'))],
         );
 
         $this->assertStringNotContainsString('Last response', $this->messageOf($journey));

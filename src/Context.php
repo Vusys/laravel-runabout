@@ -120,6 +120,17 @@ final class Context
     }
 
     /** A typed get() for remembered integers (IDs from responses, counters). */
+    public function boolean(string $key): bool
+    {
+        $value = $this->get($key);
+
+        if (! is_bool($value)) {
+            throw new RuntimeException(sprintf('Context key "%s" holds %s, expected bool.', $key, get_debug_type($value)));
+        }
+
+        return $value;
+    }
+
     public function integer(string $key): int
     {
         $value = $this->get($key);
@@ -200,14 +211,24 @@ final class Context
     }
 
     /**
+     * One of $options, drawn by the trail's seeded randomizer. Any iterable
+     * will do — a list, a keyed array, a query's Collection — in its own
+     * order; keys are ignored.
+     *
      * @template T
      *
-     * @param  non-empty-list<T>  $options
+     * @param  iterable<T>  $options
      * @return T
      */
-    public function pick(array $options): mixed
+    public function pick(iterable $options): mixed
     {
-        return $options[$this->source->int(0, count($options) - 1, fn (int $index): ?string => $this->describePick($options[$index]))];
+        $list = array_values(is_array($options) ? $options : iterator_to_array($options, false));
+
+        if ($list === []) {
+            throw new RuntimeException('pick() was given nothing to choose from — the step probably needs a when() guard that holds only while there is something to pick.');
+        }
+
+        return $list[$this->source->int(0, count($list) - 1, fn (int $index): ?string => $this->describePick($list[$index]))];
     }
 
     /** A few characters naming a picked option for the trail listing, or null when it has no short form. */
