@@ -260,7 +260,7 @@ final class RacingTest extends TestCase
             $this->journey($this->journeyOf(fn (Context $ctx): mixed => $ctx->racing(
                 table: 'users',
                 competitor: $this->competitor('ann'),
-                request: fn () => throw new RuntimeException('request failed'),
+                request: fn (): never => throw new RuntimeException('request failed'),
             )))->shuffles(0)->run();
         } catch (JourneyFailedException) {
         }

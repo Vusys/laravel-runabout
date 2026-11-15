@@ -192,7 +192,7 @@ final class JourneyRunnerTest extends TestCase
     {
         $journey = $this->journey(
             [Step::make('harmless')],
-            [Invariant::make('always broken', fn () => Assert::fail('nope'))],
+            [Invariant::make('always broken', fn (): never => Assert::fail('nope'))],
         );
 
         try {
@@ -254,7 +254,7 @@ final class JourneyRunnerTest extends TestCase
                 }),
             Step::make('explode')
                 ->after('open b')
-                ->act(fn () => Assert::fail('boom')),
+                ->act(fn (): never => Assert::fail('boom')),
         ]);
 
         try {
@@ -300,11 +300,11 @@ final class JourneyRunnerTest extends TestCase
                     function () use (&$ran): void {
                         $ran[] = 'then';
                     },
-                    fn () => Assert::fail('The otherwise branch must not run when the condition holds.'),
+                    fn (): never => Assert::fail('The otherwise branch must not run when the condition holds.'),
                 )
                 ->assertWhen(
                     fn (Context $ctx): bool => false,
-                    fn () => Assert::fail('The then branch must not run when the condition fails.'),
+                    fn (): never => Assert::fail('The then branch must not run when the condition fails.'),
                     function () use (&$ran): void {
                         $ran[] = 'otherwise';
                     },
@@ -321,7 +321,7 @@ final class JourneyRunnerTest extends TestCase
         $journey = $this->journey([
             Step::make('quiet')->assertWhen(
                 fn (Context $ctx): bool => false,
-                fn () => Assert::fail('The then branch must not run when the condition fails.'),
+                fn (): never => Assert::fail('The then branch must not run when the condition fails.'),
             ),
         ]);
 
@@ -335,7 +335,7 @@ final class JourneyRunnerTest extends TestCase
         $journey = $this->journey([
             Step::make('doomed')->assertWhen(
                 fn (Context $ctx): bool => true,
-                fn () => Assert::fail('the then branch is wrong'),
+                fn (): never => Assert::fail('the then branch is wrong'),
             ),
         ]);
 

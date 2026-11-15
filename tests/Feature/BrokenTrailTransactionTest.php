@@ -111,7 +111,7 @@ final class BrokenTrailTransactionTest extends TestCase
         $this->breakNestedTransaction();
 
         try {
-            RollBack::after(fn () => throw new RuntimeException('the trail failed'), [DB::connection()]);
+            RollBack::after(fn (): never => throw new RuntimeException('the trail failed'), [DB::connection()]);
             $this->fail('Expected the trail failure.');
         } catch (RuntimeException $caught) {
             $this->assertSame('the trail failed', $caught->getMessage());

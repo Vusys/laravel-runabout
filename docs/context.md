@@ -29,7 +29,7 @@ $ctx->defer(fn () => ...);                   // teardown stack, LIFO at end of t
 `remember($key, $value)` stores anything and returns the value (so it composes inside an `act` closure). Read it back with `get()`, or with a **typed getter** that fails loudly on the wrong type:
 
 - `instance($key, Model::class)` — returns the object, throwing unless it is an instance of the given class.
-- `integer($key)` / `string($key)` — scalar getters.
+- `integer($key)` / `string($key)` / `boolean($key)` — scalar getters, each throwing unless the key holds that type.
 
 Typed getters are worth preferring in assertions: a mistyped key surfaces as a clear error rather than a confusing downstream failure.
 
@@ -39,7 +39,7 @@ Typed getters are worth preferring in assertions: a mistyped key surfaces as a c
 
 This is the contract that makes trails reproducible: **all randomness inside a step must come from the context**, never from `rand()`, `mt_rand()`, `array_rand()`, or `fake()`.
 
-- `pick(array $options)` — a seeded choice from the options. In a shrunk trail's listing the draw names what it picked (`[drew 1 → Order #140]`) for models, enums and scalars; see [Reproducing failures](reproducing-failures.md#automatic-shrinking).
+- `pick(iterable $options)` — a seeded choice from the options: a list, a keyed array, or a Collection, in its own order with keys ignored. An empty one throws, which usually means the step needs a `when()` guard. In a shrunk trail's listing the draw names what it picked (`[drew 1 → Order #140]`) for models, enums and scalars; see [Reproducing failures](reproducing-failures.md#automatic-shrinking).
 - `randomInt(int $min, int $max)` — a seeded integer in range.
 - `randomizer()` — the underlying `\Random\Randomizer` as an escape hatch. Using it marks the execution value-opaque, so those draws are excluded from [value shrinking](reproducing-failures.md); prefer `pick()`/`randomInt()` when you want the shrinker to minimise the value.
 
@@ -50,7 +50,7 @@ This is the contract that makes trails reproducible: **all randomness inside a s
 - **Pick from what's currently valid.** Query the options that make sense now, rather than everything the journey created, and order them by key so the pick is the same on replay:
 
     ```php
-    $item = $ctx->pick(Item::query()->where('status', 'available')->orderBy('id')->get()->all());
+    $item = $ctx->pick(Item::query()->where('status', 'available')->orderBy('id')->get());
     ```
 
     When there's nothing valid to pick, say so with [`$ctx->noop()`](steps.md#saying-a-step-had-no-effect-noop), or close the step with a [`when()`](steps.md) precondition, rather than picking something invalid.
@@ -59,7 +59,7 @@ This is the contract that makes trails reproducible: **all randomness inside a s
 
     ```php
     $from = $ctx->pick($boxes);
-    $to = $ctx->pick(array_values(array_filter($boxes, fn (Box $box): bool => ! $box->is($from))));
+    $to = $ctx->pick(array_filter($boxes, fn (Box $box): bool => ! $box->is($from)));
     ```
 
 - **Prefer toggles to uniform choices between states.** "Archive if active, restore if archived" always does something; a uniform pick between archive and restore fails half its picks.

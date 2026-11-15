@@ -98,6 +98,7 @@ public function remember(string $key, mixed $value): mixed         // returns th
 public function get(string $key, mixed $default = null): mixed
 public function instance(string $key, string $class): object       // typed; throws on mismatch
 public function integer(string $key): int
+public function boolean(string $key): bool
 public function string(string $key): string
 public function push(string $key, mixed $value): array             // appends, returns the list
 public function list(string $key): array                           // [] when absent
@@ -106,7 +107,7 @@ public function forget(string $key): void
 
 // Seeded randomness — the only sanctioned source
 public function randomInt(int $min, int $max): int
-public function pick(array $options): mixed                        // shrunk listings show what it picked: [drew 1 → Order #140]
+public function pick(iterable $options): mixed                     // any iterable, keys ignored; shrunk listings show what it picked: [drew 1 → Order #140]
 public function randomizer(): Randomizer                           // escape hatch; marks the execution value-opaque
 
 // Run history
